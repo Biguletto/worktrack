@@ -6,8 +6,9 @@ Description: >-
 
 Parameters:
   AmiId:
-    Type: AWS::EC2::Image::Id
-    Description: Ubuntu Server 24.04 LTS AMI ID for the selected AWS Region.
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: Ubuntu Server 24.04 LTS (x86_64). Leave the default; it resolves the current AMI for the selected Region.
   AdminCidr:
     Type: String
     Description: Your public IP range in CIDR notation for SSH (for example 203.0.113.10/32).
@@ -321,7 +322,6 @@ Resources:
       Engine: postgres
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
-      MaxAllocatedStorage: 100
       StorageType: gp3
       StorageEncrypted: true
       DBName: !Ref DBName
@@ -331,7 +331,7 @@ Resources:
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       PubliclyAccessible: false
-      BackupRetentionPeriod: 7
+      BackupRetentionPeriod: 1
       AutoMinorVersionUpgrade: true
       DeletionProtection: false
       CopyTagsToSnapshot: true
