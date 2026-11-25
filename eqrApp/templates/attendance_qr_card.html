@@ -1,0 +1,56 @@
+{% if attendance_qr %}
+<section class="panel-card daily-qr-card mb-4">
+    <div class="daily-qr-copy">
+        <div class="eyebrow">DAILY ATTENDANCE CREDENTIAL · {{ attendance_qr.qr_date|date:'l, F d, Y'|upper }}</div>
+        <h3>Your attendance QR code</h3>
+        <p>Present this code to the administrator-operated WorkTrack kiosk when you arrive and when you leave. Your first scan records check-in; your second scan records check-out. Keep the full code visible and avoid lowering its displayed size.</p>
+        <div class="daily-qr-expiry"><i class="fa-regular fa-clock"></i> Valid only for {{ attendance_qr.qr_date|date:'F d, Y' }}. A new employee-specific QR code is issued at 12:00 AM Asia/Manila time. For easier scanning, keep phone brightness around 40–60% and avoid screen reflections.</div>
+        <div class="daily-qr-scan-panel" id="daily-qr-live-status" data-qr-date="{{ attendance_qr.qr_date|date:'Y-m-d' }}" data-status-url="{% url 'eqrApp:attendance_qr_status' %}">
+            <div class="daily-qr-scan-heading"><strong><i class="fa-solid fa-qrcode me-1"></i> QR scan status</strong>
+                {% if today_attendance.check_out %}<span id="daily-qr-scan-indicator" class="qr-scan-indicator" data-state="complete">Check-in and check-out recorded</span>
+                {% elif today_attendance.check_in %}<span id="daily-qr-scan-indicator" class="qr-scan-indicator" data-state="checked_in">Check-in recorded</span>
+                {% elif today_attendance.status == 'on_leave' %}<span id="daily-qr-scan-indicator" class="qr-scan-indicator" data-state="on_leave">On approved leave</span>
+                {% else %}<span id="daily-qr-scan-indicator" class="qr-scan-indicator" data-state="not_scanned">Not scanned yet</span>{% endif %}
+            </div>
+            <div class="daily-qr-scan-times"><span><i class="fa-solid fa-right-to-bracket"></i> Check-in: <strong id="daily-qr-check-in">{% if today_attendance.check_in %}{{ today_attendance.check_in|date:'g:i A' }}{% else %}—{% endif %}</strong></span><span><i class="fa-solid fa-right-from-bracket"></i> Check-out: <strong id="daily-qr-check-out">{% if today_attendance.check_out %}{{ today_attendance.check_out|date:'g:i A' }}{% else %}—{% endif %}</strong></span></div>
+            <small id="daily-qr-scan-updated">This status refreshes automatically after the kiosk records a scan.</small>
+        </div>
+        <a href="{% url 'eqrApp:attendance_list' %}" class="text-link mt-3 d-inline-flex">Open attendance log <i class="fa-solid fa-arrow-right ms-2"></i></a>
+    </div>
+    <div class="daily-qr-image-wrap">
+        <img src="{{ attendance_qr.image_data_uri }}" alt="Your unique WorkTrack attendance QR code for {{ attendance_qr.qr_date }}" class="daily-qr-image">
+        <span>Employee ID: {{ employee.employee_id }}</span>
+    </div>
+</section>
+<script>
+(function () {
+    const panel = document.getElementById('daily-qr-live-status');
+    if (!panel || panel.dataset.started === '1') return;
+    panel.dataset.started = '1';
+    const indicator = document.getElementById('daily-qr-scan-indicator');
+    const checkIn = document.getElementById('daily-qr-check-in');
+    const checkOut = document.getElementById('daily-qr-check-out');
+    const updated = document.getElementById('daily-qr-scan-updated');
+    async function refreshStatus() {
+        try {
+            const response = await fetch(panel.dataset.statusUrl, {credentials: 'same-origin', cache: 'no-store', headers: {'X-Requested-With': 'XMLHttpRequest'}});
+            if (!response.ok) throw new Error('Status unavailable');
+            const data = await response.json();
+            if (data.date !== panel.dataset.qrDate) {
+                window.location.reload();
+                return;
+            }
+            indicator.dataset.state = data.state;
+            indicator.textContent = data.label;
+            checkIn.textContent = data.check_in || '—';
+            checkOut.textContent = data.check_out || '—';
+            updated.textContent = data.last_updated ? 'Last updated ' + data.last_updated + ' · Automatically refreshed' : 'Waiting for the administrator-operated kiosk to record your first scan.';
+        } catch (error) {
+            updated.textContent = 'Live status is temporarily unavailable. Check the kiosk confirmation or reopen your attendance log.';
+        }
+    }
+    refreshStatus();
+    window.setInterval(refreshStatus, 5000);
+})();
+</script>
+{% endif %}

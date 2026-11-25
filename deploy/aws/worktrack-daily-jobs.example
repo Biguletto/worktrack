@@ -1,0 +1,8 @@
+# The deployment script sets the EC2 host timezone to Asia/Manila. Cron below uses that system-local time.
+0 0 * * * cd /opt/worktrack/app && set -a && . /etc/worktrack/worktrack.env && set +a && /opt/worktrack/venv/bin/python manage.py generate_daily_attendance_qr >> /var/log/worktrack-qr.log 2>&1
+
+# Example crontab for user www-data. Adjust the schedule to the employer's rules.
+# Daily at 8:00 PM Asia/Manila (configure the server's timezone accordingly).
+0 20 * * 1-5 cd /opt/worktrack/app && set -a && . /etc/worktrack/worktrack.env && set +a && /opt/worktrack/venv/bin/python manage.py mark_daily_absences >> /var/log/worktrack-absence.log 2>&1
+# Daily at 9:00 AM; reminders become eligible after LEAVE_REMINDER_DAYS.
+0 9 * * * cd /opt/worktrack/app && set -a && . /etc/worktrack/worktrack.env && set +a && /opt/worktrack/venv/bin/python manage.py send_pending_leave_reminders >> /var/log/worktrack-reminders.log 2>&1

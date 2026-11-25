@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}My Dashboard | WorkTrack{% endblock %}
+{% block content %}
+<div class="welcome-row employee-welcome">
+    <div><h2>Hello, {{ employee.user.first_name|default:employee.user.username }}.</h2><p>Position: {{ employee.position }} · Department: {{ employee.department }} · Employee ID {{ employee.employee_id }}</p></div>
+</div>
+{% include 'attendance_qr_card.html' %}
+<div class="stats-grid employee-stats">
+    <div class="stat-card"><div class="stat-icon icon-blue"><i class="fa-regular fa-clock"></i></div><div class="stat-label">Today's status</div><div class="stat-value stat-word">{% if approved_leave_today %}On leave{% elif today_attendance %}{{ today_attendance.get_status_display }}{% else %}Not checked in{% endif %}</div><div class="stat-foot">Attendance record for today</div></div>
+    <div class="stat-card"><div class="stat-icon icon-orange"><i class="fa-solid fa-hourglass-half"></i></div><div class="stat-label">Pending requests</div><div class="stat-value">{{ pending_leave_count }}</div><div class="stat-foot">Waiting for supervisor or HR</div></div>
+    <div class="stat-card"><div class="stat-icon icon-green"><i class="fa-regular fa-calendar-check"></i></div><div class="stat-label">Approved requests</div><div class="stat-value">{{ approved_leave_count }}</div><div class="stat-foot">Approved leave applications</div></div>
+</div>
+{% if leave_balances %}
+<section class="panel-card mb-4"><div class="panel-heading"><div><h3>My leave balances</h3><p>Configured entitlement for {{ today.year }}</p></div><span class="muted-copy">Current year</span></div><div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Leave type</th><th>Entitled</th><th>Used</th><th>Available</th></tr></thead><tbody>{% for balance in leave_balances %}<tr><td><strong>{{ balance.leave_type.name }}</strong></td><td>{{ balance.entitled_days }}</td><td>{{ balance.used_days }}</td><td><strong>{{ balance.available_days }}</strong></td></tr>{% endfor %}</tbody></table></div></section>
+{% endif %}
+<div class="dashboard-grid">
+    <section class="panel-card"><div class="panel-heading"><div><h3>My leave requests</h3><p>Track your recent applications</p></div><a class="text-link" href="{% url 'eqrApp:leave_list' %}">View all <i class="fa-solid fa-arrow-right"></i></a></div>
+        {% if leave_applications %}<div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Leave type</th><th>Dates</th><th>Days</th><th>Status</th><th></th></tr></thead><tbody>{% for application in leave_applications %}<tr><td><strong>{{ application.leave_type.name }}</strong></td><td>{{ application.start_date|date:'M d, Y' }} - {{ application.end_date|date:'M d, Y' }}</td><td>{{ application.requested_days }}</td><td><span class="status-pill status-{{ application.status }}">{{ application.get_status_display }}</span></td><td><a class="icon-link" href="{% url 'eqrApp:leave_detail' application.pk %}"><i class="fa-solid fa-chevron-right"></i></a></td></tr>{% endfor %}</tbody></table></div>
+        {% else %}<div class="empty-state"><i class="fa-regular fa-calendar"></i><strong>No leave requests</strong><span>Your submitted applications will appear here.</span><a class="btn btn-sm btn-outline-primary mt-2" href="{% url 'eqrApp:leave_list' %}">Open Leave Requests</a></div>{% endif %}
+    </section>
+    <section class="panel-card"><div class="panel-heading"><div><h3>Attendance history</h3><p>Your latest daily records</p></div><a class="text-link" href="{% url 'eqrApp:attendance_list' %}">View all <i class="fa-solid fa-arrow-right"></i></a></div>
+        {% if attendance_history %}<div class="simple-list">{% for record in attendance_history %}<div class="simple-list-row"><div><strong>{{ record.attendance_date|date:'D, M d, Y' }}</strong><small>{% if record.check_in %}{{ record.check_in|date:'g:i A' }}{% else %}No check-in{% endif %}{% if record.check_out %} · {{ record.check_out|date:'g:i A' }}{% endif %}</small></div><span class="status-pill status-{{ record.status }}">{{ record.get_status_display }}</span></div>{% endfor %}</div>{% else %}<div class="empty-state"><i class="fa-regular fa-clock"></i><strong>No attendance records</strong><span>Your daily records will be shown here.</span></div>{% endif %}
+    </section>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Employees | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar">
+    <div>
+        <h2>{% if is_admin %}Employee Account Support{% else %}Employees Overview{% endif %}</h2>
+        <p>{% if is_admin %}IT support view for account troubleshooting and credential resets. Employee profile, attendance, and leave records remain read-only here.{% else %}HR manages employee and supervisor information, employment status, and reporting assignments.{% endif %}</p>
+    </div>
+    {% if not is_admin %}<a href="{% url 'eqrApp:employee_create' %}" class="btn btn-primary"><i class="fa-solid fa-user-plus me-2"></i>Add employee / supervisor</a>{% endif %}
+</div>
+<section class="panel-card">
+    <form method="get" class="filter-bar">
+        <div class="search-field"><i class="fa-solid fa-magnifying-glass"></i><input type="search" name="q" value="{{ search }}" placeholder="Search username, name, employee ID, or email"></div>
+        <select class="form-select" name="department"><option value="">All departments</option>{% for item in departments %}<option value="{{ item }}" {% if selected_department == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+        <select class="form-select" name="status"><option value="">All statuses</option><option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option><option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive</option><option value="terminated" {% if selected_status == 'terminated' %}selected{% endif %}>Terminated</option></select>
+        {% if is_admin %}<select class="form-select" name="role"><option value="">All account roles</option><option value="employee" {% if selected_access_role == 'employee' %}selected{% endif %}>Employee</option><option value="supervisor" {% if selected_access_role == 'supervisor' %}selected{% endif %}>Supervisor</option><option value="hr" {% if selected_access_role == 'hr' %}selected{% endif %}>HR Personnel</option></select>{% endif %}
+        <button class="btn btn-outline-primary" type="submit">Filter</button><a class="btn btn-light" href="{% url 'eqrApp:employee_list' %}">Reset</a>
+    </form>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Employee</th><th>Employee ID</th><th>Job position</th><th>WorkTrack access</th><th>Department</th><th>Supervisor</th><th>Status</th><th>{% if is_admin %}Account support{% else %}Profile{% endif %}</th></tr></thead><tbody>
+    {% for employee in employees %}
+        <tr>
+            <td><div class="person-cell"><span class="person-avatar">{{ employee.user.first_name|default:employee.user.username|first|upper }}</span><span><strong>{{ employee.full_name }}</strong><small>{{ employee.user.email }} · @{{ employee.user.username }}</small></span></div></td>
+            <td>{{ employee.employee_id }}</td><td><strong>{{ employee.position }}</strong></td><td><span class="role-pill role-{{ employee.role }}">{{ employee.get_role_display }}</span></td>
+            <td>{{ employee.department|default:'—' }}</td><td>{% if employee.manager %}{{ employee.manager.get_full_name|default:employee.manager.username }}{% else %}<span class="muted-copy">Not assigned</span>{% endif %}</td>
+            <td><span class="status-pill status-{{ employee.employment_status }}">{{ employee.get_employment_status_display }}</span></td>
+            <td>
+                {% if is_admin %}
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'eqrApp:employee_account_support_edit' employee.pk %}"><i class="fa-regular fa-pen-to-square me-1"></i>Edit account</a>
+                {% else %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'eqrApp:employee_edit' employee.pk %}"><i class="fa-regular fa-pen-to-square me-1"></i>Edit</a>{% endif %}
+            </td>
+        </tr>
+    {% empty %}<tr><td colspan="8"><div class="empty-state"><i class="fa-solid fa-users"></i><strong>No accounts found</strong><span>Adjust your search or filters.</span></div></td></tr>{% endfor %}
+    </tbody></table></div>
+    <div class="table-footer">{{ employees|length }} account{{ employees|length|pluralize }}</div>
+</section>
+
+{% endblock %}

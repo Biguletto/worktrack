@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Leave Balances | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>Leave balance management</h2><p>Set annual entitlements and monitor available leave. Configure a leave type to track balances before assigning entitlements.</p></div><a class="btn btn-primary" href="{% url 'eqrApp:leave_balance_create' %}"><i class="fa-solid fa-plus me-2"></i>Add balance</a></div>
+<section class="panel-card"><form method="get" class="filter-bar"><div class="search-field"><input type="search" name="q" value="{{ search }}" placeholder="Employee, ID, or leave type"></div><input class="form-control" type="number" name="year" min="2000" max="2200" value="{{ year_filter }}"><button class="btn btn-outline-primary" type="submit">Filter</button><a class="btn btn-light" href="{% url 'eqrApp:leave_balance_list' %}">Reset</a></form>
+<div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Employee</th><th>Leave Type</th><th>Year</th><th>Entitled</th><th>Used</th><th>Available</th><th></th></tr></thead><tbody>
+{% for item in balances %}<tr><td><strong>{{ item.employee.full_name }}</strong><small class="table-sub">{{ item.employee.employee_id }}</small></td><td>{{ item.leave_type.name }}</td><td>{{ item.year }}</td><td>{{ item.entitled_days }}</td><td>{{ item.used_days }}</td><td><strong>{{ item.available_days }}</strong></td><td><div class="d-flex gap-2"><a class="btn btn-sm btn-outline-secondary" href="{% url 'eqrApp:leave_balance_edit' item.pk %}">Edit</a><form method="post" action="{% url 'eqrApp:leave_balance_delete' item.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Delete this leave balance?')">Delete</button></form></div></td></tr>
+{% empty %}<tr><td colspan="7"><div class="empty-state"><strong>No balances found for {{ year_filter }}</strong><span>Add an entitlement for a balance-tracked leave type.</span></div></td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

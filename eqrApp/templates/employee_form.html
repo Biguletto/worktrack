@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}{{ page_title }} | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>{% if is_edit %}Update account and profile{% else %}Create account and profile{% endif %}</h2><p>Choose the department and access role to see the available job titles and supervisors.</p></div><a href="{% url 'eqrApp:employee_list' %}" class="btn btn-light"><i class="fa-solid fa-arrow-left me-2"></i>Back to employees</a></div>
+<div class="form-card"><form method="post">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="form-section-title"><span>01</span><div><h3>Account details</h3><p>Contact information. WorkTrack automatically generates the username and temporary password for new accounts.</p></div></div>
+    {% if not is_edit %}<div class="alert alert-info small"><strong>Automatic login setup:</strong> Username is generated as lastnamefirstname (a number is appended if needed). The initial password is <code>employee123</code> and must be changed at first sign-in.</div>{% else %}<div class="alert alert-secondary small">Login credentials are not edited in this form. An Administrator can reset the username or temporary password from Employee Account Support.</div>{% endif %}
+    <div class="form-grid">
+        {% for field in form %}
+            {% if field.name == 'first_name' or field.name == 'last_name' or field.name == 'email' %}
+                <div class="form-field "><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required-mark">*</span>{% endif %}</label>{{ field }}{% if field.help_text %}<div class="form-help">{{ field.help_text }}</div>{% endif %}{% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <div class="form-section-title section-spaced"><span>02</span><div><h3>Employment information</h3><p>Company department, job title, WorkTrack permissions, and reporting details.</p></div></div>
+    <div class="form-grid">
+        {% for field in form %}
+            {% if field.name == 'employee_id' or field.name == 'department' or field.name == 'position' or field.name == 'role' or field.name == 'phone_number' or field.name == 'hire_date' or field.name == 'manager' or field.name == 'backup_manager' or field.name == 'employment_status' %}
+                <div class="form-field {% if field.name == 'department' %}department-field{% elif field.name == 'position' %}job-position-field{% elif field.name == 'role' %}access-role-field{% endif %}">
+                    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required-mark">*</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.name == 'department' %}<div class="form-help">Choose one of the six configured company departments.</div><div class="department-usage-note" id="department-usage-note" aria-live="polite">Select a department to view its WorkTrack usage.</div>{% endif %}
+                    {% if field.name == 'position' %}<div class="form-help">Available job titles depend on the selected department and access role. Supervisor titles are reserved for Supervisor access; all other titles use Employee access.</div>{% endif %}
+                    {% if field.help_text %}<div class="form-help">{{ field.help_text }}</div>{% endif %}
+                    {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <div class="form-actions"><a href="{% url 'eqrApp:employee_list' %}" class="btn btn-light">Cancel</a><button class="btn btn-primary" type="submit">{% if is_edit %}Save changes{% else %}Create account{% endif %}</button></div>
+</form></div>
+{{ department_positions_by_role|json_script:'department-position-map' }}
+{{ department_supervisors|json_script:'department-supervisor-map' }}
+{{ department_system_usage|json_script:'department-system-usage-map' }}
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    const departmentField = document.getElementById('id_department');
+    const positionField = document.getElementById('id_position');
+    const roleField = document.getElementById('id_role');
+    const managerField = document.getElementById('id_manager');
+    const backupField = document.getElementById('id_backup_manager');
+    const mapNode = document.getElementById('department-position-map');
+    const supervisorNode = document.getElementById('department-supervisor-map');
+    const usageNode = document.getElementById('department-system-usage-map');
+    const usageNote = document.getElementById('department-usage-note');
+    if (!departmentField || !positionField || !roleField || !mapNode) return;
+
+    const positionsByRole = JSON.parse(mapNode.textContent || '{}');
+    const supervisorsByDepartment = supervisorNode ? JSON.parse(supervisorNode.textContent || '{}') : {};
+    const usageByDepartment = usageNode ? JSON.parse(usageNode.textContent || '{}') : {};
+    const initialPosition = positionField.value;
+    const initialManager = managerField ? managerField.value : '';
+    const initialBackup = backupField ? backupField.value : '';
+
+    function updatePositions(preserveCurrent) {
+        const department = departmentField.value;
+        const accessRole = roleField.value;
+        const roleMap = positionsByRole[accessRole] || positionsByRole.employee || {};
+        const choices = roleMap[department] || [];
+        if (usageNote) usageNote.textContent = usageByDepartment[department] || 'Select a department to view its WorkTrack usage.';
+        const previous = preserveCurrent ? positionField.value : '';
+        positionField.replaceChildren(new Option('Select job position', ''));
+        choices.forEach(function (choice) { positionField.add(new Option(choice[1], choice[0])); });
+        if (previous && choices.some(choice => choice[0] === previous)) positionField.value = previous;
+        else if (initialPosition && choices.some(choice => choice[0] === initialPosition) && preserveCurrent) positionField.value = initialPosition;
+    }
+
+    function updateSupervisors(preserveCurrent) {
+        const department = departmentField.value;
+        const options = supervisorsByDepartment[department] || [];
+        [managerField, backupField].forEach(function (field, index) {
+            if (!field) return;
+            const previous = preserveCurrent ? field.value : '';
+            field.replaceChildren(new Option('---------', ''));
+            options.forEach(function (item) { field.add(new Option(item.label, String(item.id))); });
+            const preferred = previous || (index === 0 ? initialManager : initialBackup);
+            if (preferred && options.some(item => String(item.id) === String(preferred))) field.value = preferred;
+        });
+    }
+
+    departmentField.addEventListener('change', function () { updatePositions(false); updateSupervisors(false); });
+    roleField.addEventListener('change', function () { updatePositions(false); });
+    updatePositions(true);
+    updateSupervisors(true);
+})();
+</script>
+{% endblock %}

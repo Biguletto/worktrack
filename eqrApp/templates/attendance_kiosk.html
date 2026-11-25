@@ -1,0 +1,1223 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Secure Attendance Kiosk | WorkTrack</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+    <link href="{% static 'css/hrms.css' %}" rel="stylesheet">
+    <style>
+.kiosk-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+.kiosk-intro h2{font-size:22px;font-weight:800;margin:5px 0 6px;color:#17233d}
+.kiosk-intro p{font-size:12px;color:#7c879b;margin:0;max-width:780px;line-height:1.65}
+.kiosk-admin-lock{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#fff3e5;color:#986016;font-size:10px;font-weight:800;white-space:nowrap}
+.kiosk-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(285px,.65fr);gap:18px;align-items:stretch}
+.kiosk-camera-panel,.kiosk-help-panel{padding:20px;border:1px solid #e7ebf3;box-shadow:0 8px 28px rgba(26,39,68,.045)}
+.kiosk-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:5px}
+.kiosk-camera-panel h3,.kiosk-help-panel h3{font-size:15px;font-weight:800;margin:0;color:#1a2740}
+.kiosk-muted{font-size:11px;color:#8992a5;margin:0 0 15px;line-height:1.55}
+.kiosk-state{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;background:#f1f3f8;color:#68748a;font-size:10px;font-weight:800;white-space:nowrap}
+.kiosk-state:before{content:'';width:7px;height:7px;border-radius:50%;background:#a4adbb}
+.kiosk-state.active{background:#e8f7ef;color:#176c4b}.kiosk-state.active:before{background:#21a36b;box-shadow:0 0 0 3px rgba(33,163,107,.12)}
+.kiosk-state.busy{background:#fff7e6;color:#986016}.kiosk-state.busy:before{background:#e7a735}
+.kiosk-video-wrap{position:relative;background:#101521;min-height:350px;display:grid;place-items:center;border-radius:14px;overflow:hidden;isolation:isolate}
+.kiosk-video-wrap video{display:none;width:100%;height:100%;min-height:350px;max-height:540px;object-fit:contain;background:#101521}
+.kiosk-camera-placeholder{padding:28px;color:#c5cada;text-align:center;font-size:12px;line-height:1.6}
+.kiosk-camera-placeholder i{display:block;font-size:38px;margin-bottom:12px;color:#aaa5ef}
+.kiosk-scan-guide{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(68%,330px);aspect-ratio:1;border:2px solid rgba(166,157,255,.98);border-radius:18px;box-shadow:0 0 0 999px rgba(9,14,25,.2);pointer-events:none}
+.kiosk-scan-guide:before,.kiosk-scan-guide:after{content:'';position:absolute;width:28px;height:28px;border-color:#fff;border-style:solid}
+.kiosk-scan-guide:before{top:-2px;left:-2px;border-width:4px 0 0 4px;border-top-left-radius:14px}
+.kiosk-scan-guide:after{right:-2px;bottom:-2px;border-width:0 4px 4px 0;border-bottom-right-radius:14px}
+.kiosk-guide-label{position:absolute;left:50%;bottom:-33px;transform:translateX(-50%);white-space:nowrap;color:#fff;font-size:9px;font-weight:800;letter-spacing:.8px;text-shadow:0 1px 4px #000}
+.kiosk-device-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;margin-top:15px}
+.kiosk-device-row label,.kiosk-setting label{display:block;font-size:10px;font-weight:800;color:#69748a;margin-bottom:6px}
+.kiosk-device-row select{font-size:11px;min-height:40px}
+.kiosk-controls{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}
+.kiosk-controls .btn{font-size:11px;min-height:39px;padding:9px 13px}
+.kiosk-result{display:flex;align-items:center;gap:10px;padding:13px 15px;border-radius:10px;margin-top:14px;background:#f3f5fa;color:#59677e;font-size:12px;min-height:50px;line-height:1.55;border:1px solid transparent}
+.kiosk-result:before{font-family:'Font Awesome 6 Free';font-weight:900;content:'\f05a';font-size:15px;color:#74819a;flex:0 0 auto}
+.kiosk-result.success{background:#e8f7ef;color:#176c4b;border-color:#cdebd9}.kiosk-result.success:before{content:'\f058';color:#189765}
+.kiosk-result.error{background:#fff0f0;color:#a22c39;border-color:#f7d5d8}.kiosk-result.error:before{content:'\f06a';color:#c34450}
+.kiosk-camera-settings{display:none;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;padding:14px;border:1px solid #edf0f5;border-radius:10px;background:#fbfcfe}
+.kiosk-setting input{width:100%;accent-color:#7167c9}.kiosk-setting output{font-size:10px;color:#7772a9;font-weight:800}.kiosk-setting small{display:block;color:#929bac;font-size:9px;margin-top:4px;line-height:1.5}
+.kiosk-help-list{margin:0;padding-left:19px;color:#707b8f;font-size:11px;line-height:1.85}.kiosk-help-list li{padding-left:2px;margin-bottom:5px}
+.kiosk-security-note{margin-top:15px;padding:13px;border-radius:10px;background:#f7f7ff;color:#67628f;font-size:10px;line-height:1.65}.kiosk-security-note strong{display:block;color:#4c467e;margin-bottom:4px}
+.kiosk-tip{margin-top:12px;padding:13px;border-radius:10px;background:#f3f8ff;color:#476887;font-size:10px;line-height:1.65}.kiosk-tip strong{display:block;color:#315777;margin-bottom:4px}
+.kiosk-log-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.kiosk-live-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#e8f7ef;color:#176c4b;font-size:9px;font-weight:800;letter-spacing:.4px}.kiosk-live-pill:before{content:'';width:6px;height:6px;border-radius:50%;background:#20a36a;box-shadow:0 0 0 3px rgba(32,163,106,.12)}
+.kiosk-log-count{font-size:10px;color:#8992a5;font-weight:700}.kiosk-log-table{margin-bottom:0}.kiosk-log-table tbody tr.kiosk-row-updated{animation:kioskRowFlash 1.8s ease-out}
+@keyframes kioskRowFlash{0%{background:#e8f7ef}100%{background:transparent}}
+@media(max-width:900px){.kiosk-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.kiosk-intro{flex-direction:column}.kiosk-camera-panel,.kiosk-help-panel{padding:15px}.kiosk-video-wrap,.kiosk-video-wrap video{min-height:245px}.kiosk-device-row{grid-template-columns:1fr}.kiosk-camera-settings{grid-template-columns:1fr}.kiosk-panel-heading{align-items:flex-start;flex-direction:column}}
+:root{color-scheme:light}
+body.kiosk-standalone{margin:0;background:#eef2f8;min-height:100vh}
+.kiosk-topbar{height:66px;padding:0 clamp(16px,4vw,42px);display:flex;align-items:center;justify-content:space-between;gap:16px;background:#1f2b49;color:#fff;box-shadow:0 2px 12px rgba(13,25,49,.14)}
+.kiosk-brand{display:flex;align-items:center;gap:11px;color:#fff;text-decoration:none;font-weight:800;font-size:16px}
+.kiosk-brand-mark{width:36px;height:36px;border-radius:11px;background:#7165df;display:grid;place-items:center;color:white}
+.kiosk-brand small{display:block;color:#b9c3db;font-size:9px;font-weight:500;letter-spacing:.4px;margin-top:2px}
+.kiosk-topbar-right{display:flex;align-items:center;gap:14px}
+.kiosk-day{font-size:11px;color:#d6dced}
+.kiosk-exit-button{border:1px solid rgba(255,255,255,.4);border-radius:9px;color:#fff;background:rgba(255,255,255,.08);padding:9px 13px;font-size:11px;font-weight:800}
+.kiosk-exit-button:hover{background:rgba(255,255,255,.16);color:#fff}
+.kiosk-main{max-width:1120px;margin:0 auto;padding:30px 22px 48px}
+.kiosk-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:20px}
+.kiosk-heading h1{font-size:26px;font-weight:800;color:#182541;margin:3px 0 7px}
+.kiosk-heading p{color:#748097;font-size:12px;margin:0;line-height:1.6}
+.kiosk-secure-pill{padding:8px 12px;border-radius:999px;background:#e8f7ef;color:#176c4b;font-size:10px;font-weight:800;white-space:nowrap}
+.kiosk-grid{grid-template-columns:minmax(0,1fr);max-width:100%;margin:0 auto}
+.kiosk-camera-panel{max-width:100%;padding:22px 24px}
+.kiosk-video-wrap{min-height:390px;max-height:540px}
+.kiosk-video-wrap video{min-height:390px}
+.kiosk-result{font-size:14px;min-height:64px;font-weight:700;padding:16px 18px}
+.kiosk-result.success{font-size:16px}
+.kiosk-instructions{margin-top:16px;text-align:center;color:#8390a6;font-size:11px;line-height:1.7}
+
+.kiosk-exit-dialog{width:min(440px,calc(100% - 28px));border:0;border-radius:16px;padding:0;box-shadow:0 24px 80px rgba(10,20,40,.28)}
+.kiosk-exit-dialog::backdrop{background:rgba(13,20,35,.66);backdrop-filter:blur(3px)}
+.kiosk-exit-dialog-inner{padding:24px}
+.kiosk-exit-dialog h2{font-size:19px;font-weight:800;color:#17233d;margin:0 0 8px}
+.kiosk-exit-dialog p{font-size:12px;color:#748097;line-height:1.6;margin:0 0 18px}
+.kiosk-exit-dialog label{display:block;font-weight:800;font-size:11px;color:#58657c;margin-bottom:7px}
+.kiosk-exit-dialog input{width:100%;min-height:43px;border:1px solid #dfe5ef;border-radius:9px;padding:9px 11px}
+.kiosk-exit-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
+.kiosk-message-stack{max-width:1120px;margin:16px auto 0;padding:0 22px}
+.kiosk-footer{padding:10px 20px 22px;text-align:center;color:#9aa4b5;font-size:10px}
+@media(max-width:640px){.kiosk-topbar{height:auto;min-height:62px;padding:12px 15px}.kiosk-day{display:none}.kiosk-main{padding:20px 12px}.kiosk-heading{display:block}.kiosk-secure-pill{display:inline-flex;margin-top:12px}.kiosk-camera-panel{padding:14px}.kiosk-video-wrap,.kiosk-video-wrap video{min-height:250px}.kiosk-topbar-right{gap:6px}.kiosk-exit-button{padding:8px 10px}}
+
+
+/* Fixed scan result banner: visible regardless of page scroll position. */
+#kiosk-result.kiosk-result {
+    position: fixed !important;
+    top: 82px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99999;
+    width: min(820px, calc(100vw - 32px));
+    min-height: 74px;
+    margin: 0;
+    padding: 18px 24px;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    box-shadow: 0 14px 38px rgba(9, 18, 36, .28);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.45;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+}
+#kiosk-result.kiosk-result.success {
+    background: #d9f8e7;
+    color: #075d38;
+    border-color: #28a66a;
+    box-shadow: 0 14px 38px rgba(25, 150, 90, .25);
+    font-size: 17px;
+}
+#kiosk-result.kiosk-result.error {
+    background: #ffe0e0;
+    color: #941c29;
+    border-color: #e34855;
+    box-shadow: 0 14px 38px rgba(220, 55, 65, .24);
+    font-size: 17px;
+}
+#kiosk-result.kiosk-result:not(.success):not(.error) {
+    background: #e8efff;
+    color: #294a85;
+    border-color: #809de0;
+}
+#kiosk-result.kiosk-result:before { font-size: 24px; }
+
+/* Keep the dedicated scanner on one viewport without page scrolling. */
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body.kiosk-standalone { height: 100vh; min-height: 0; overflow: hidden; }
+.kiosk-main {
+    width: min(1180px, 100%);
+    height: calc(100vh - 66px);
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 12px 22px 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.kiosk-heading { flex: 0 0 auto; margin-bottom: 10px; }
+.kiosk-heading h1 { font-size: 21px; margin: 0 0 4px; }
+.kiosk-heading p { font-size: 11px; line-height: 1.4; }
+.kiosk-grid { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.kiosk-camera-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 18px;
+}
+.kiosk-panel-heading, .kiosk-muted, .kiosk-device-row, .kiosk-controls,
+.kiosk-camera-settings, .kiosk-instructions { flex: 0 0 auto; }
+.kiosk-video-wrap { flex: 1 1 auto; min-height: 120px; max-height: none; }
+.kiosk-video-wrap video { min-height: 120px; max-height: none; }
+.kiosk-result { margin-top: 9px; }
+.kiosk-instructions { margin-top: 7px; font-size: 10px; }
+.kiosk-footer { display: none; }
+.kiosk-message-stack { position: fixed; top: 72px; right: 12px; z-index: 100000; max-width: 420px; margin: 0; padding: 0; }
+@media (max-height: 760px) {
+    .kiosk-heading { margin-bottom: 7px; }
+    .kiosk-heading p, .kiosk-muted, .kiosk-instructions { display: none; }
+    .kiosk-camera-panel { padding: 10px 14px; }
+    .kiosk-device-row { margin-top: 8px; }
+    .kiosk-controls { margin-top: 7px; }
+}
+@media (max-height: 620px) {
+    .kiosk-day, .kiosk-heading .role-kicker, .kiosk-camera-settings { display: none !important; }
+    .kiosk-topbar { height: 54px; }
+    .kiosk-main { height: calc(100vh - 54px); padding-top: 6px; }
+    .kiosk-heading h1 { font-size: 17px; }
+    .kiosk-video-wrap { min-height: 90px; }
+    #kiosk-result.kiosk-result { top: 62px; min-height: 54px; padding: 10px 14px; font-size: 13px; }
+}
+@media (max-width: 640px) {
+    .kiosk-topbar { height: 58px; min-height: 58px; padding: 7px 10px; }
+    .kiosk-main { height: calc(100vh - 58px); padding: 8px 8px 10px; }
+    .kiosk-heading { display: block; margin-bottom: 7px; }
+    .kiosk-heading p, .kiosk-muted, .kiosk-instructions { display: none; }
+    .kiosk-heading h1 { font-size: 17px; }
+    .kiosk-secure-pill { display: inline-flex; margin-top: 4px; padding: 5px 8px; }
+    .kiosk-camera-panel { padding: 9px; }
+    .kiosk-video-wrap, .kiosk-video-wrap video { min-height: 100px; }
+    .kiosk-device-row { margin-top: 7px; }
+    .kiosk-controls { gap: 6px; margin-top: 7px; }
+    .kiosk-controls .btn { min-height: 34px; padding: 6px 9px; font-size: 10px; }
+    #kiosk-result.kiosk-result { top: 65px; width: calc(100vw - 16px); min-height: 58px; padding: 11px 14px; font-size: 13px; }
+    #kiosk-result.kiosk-result.success, #kiosk-result.kiosk-result.error { font-size: 14px; }
+}
+
+
+/* ===== CHANGES (1): scanner-only viewport, live log, prominent scan confirmation ===== */
+html, body { height:100%; width:100%; overflow:hidden !important; }
+body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; background:#edf2f8; }
+.kiosk-topbar { height:56px; min-height:56px; padding:0 22px; }
+.kiosk-locked { display:inline-flex; align-items:center; gap:5px; padding:7px 11px; border-radius:99px; background:rgba(255,255,255,.12); color:#e7ecfa; font-size:10px; font-weight:800; }
+.kiosk-main.kiosk-screen { width:100%; max-width:1560px; height:calc(100vh - 56px); margin:0 auto; padding:10px 18px 8px; display:flex; flex-direction:column; overflow:hidden; }
+.kiosk-heading { flex:0 0 auto; align-items:center; margin:0 0 10px; }
+.kiosk-heading h1 { font-size:20px; margin:0 0 3px; }
+.kiosk-heading p { font-size:10px; line-height:1.4; }
+.kiosk-workspace { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(330px,.9fr); gap:12px; flex:1 1 auto; min-height:0; overflow:hidden; }
+.kiosk-camera-panel,.kiosk-log-panel { min-width:0; min-height:0; height:100%; overflow:hidden; display:flex; flex-direction:column; padding:13px 15px; }
+.kiosk-panel-heading { flex:0 0 auto; margin-bottom:8px; }
+.kiosk-muted { display:none; }
+.kiosk-video-wrap { min-height:100px; flex:1 1 auto; max-height:none; }
+.kiosk-video-wrap video { min-height:100px; max-height:none; height:100%; }
+.kiosk-instructions { flex:0 0 auto; margin:8px 0 5px; text-align:left; font-size:10px; line-height:1.45; color:#61718d; }
+.kiosk-scan-statusline { flex:0 0 auto; display:flex; justify-content:space-between; flex-wrap:wrap; gap:5px 12px; padding:7px 10px; border-radius:8px; background:#f2f5fa; color:#687791; font-size:9px; font-weight:700; }
+.kiosk-scan-statusline i { color:#6a60d4; }
+.kiosk-runtime-controls { display:none !important; }
+.kiosk-result { display:none; }
+#kiosk-result.kiosk-floating-result { display:flex !important; position:fixed !important; top:70px; left:50%; transform:translateX(-50%); z-index:100100; width:min(760px,calc(100vw - 28px)); min-height:72px; margin:0; padding:16px 22px; border:2px solid transparent; border-radius:15px; box-shadow:0 16px 45px rgba(10,20,40,.30); gap:13px; font-size:16px; font-weight:850; line-height:1.4; pointer-events:none; backdrop-filter:blur(9px); }
+#kiosk-result.kiosk-floating-result.success { background:#d9f8e7; border-color:#28a66a; color:#075d38; }
+#kiosk-result.kiosk-floating-result.error { background:#ffe0e0; border-color:#e34855; color:#941c29; }
+#kiosk-result.kiosk-floating-result:not(.success):not(.error) { background:#e8efff; border-color:#809de0; color:#294a85; }
+#kiosk-result.kiosk-floating-result.success:before { content:'\f058'; color:#15965d; font-size:28px; }
+#kiosk-result.kiosk-floating-result.error:before { content:'\f06a'; color:#d13e4b; font-size:28px; }
+#kiosk-result.kiosk-floating-result:not(.success):not(.error):before { content:'\f05a'; color:#5070ac; font-size:23px; }
+.scan-feedback-overlay { position:fixed; inset:0; z-index:100090; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; pointer-events:none; background:rgba(8,18,32,.08); }
+.scan-feedback-overlay.visible { display:flex; animation:scanOverlayFade 1.35s ease forwards; }
+.scan-feedback-symbol { width:112px; height:112px; display:grid; place-items:center; border-radius:50%; background:#16a36a; color:#fff; font-size:64px; box-shadow:0 12px 50px rgba(0,0,0,.25); border:7px solid rgba(255,255,255,.9); }
+.scan-feedback-overlay.error .scan-feedback-symbol { background:#d94350; }
+.scan-feedback-label { color:#fff; font-size:16px; font-weight:900; letter-spacing:1px; text-shadow:0 2px 10px rgba(0,0,0,.7); }
+@keyframes scanOverlayFade { 0%{opacity:0;transform:scale(.88)} 12%{opacity:1;transform:scale(1)} 72%{opacity:1} 100%{opacity:0} }
+.kiosk-log-heading { display:flex; justify-content:space-between; align-items:center; }
+.kiosk-log-heading p { margin:4px 0 0; color:#8792a6; font-size:10px; }
+.kiosk-live-pill { flex:0 0 auto; }
+.kiosk-log-summary { display:flex; align-items:baseline; gap:7px; padding:7px 10px; margin-bottom:8px; border-radius:8px; background:#f4f6fb; color:#8090a8; font-size:10px; }
+.kiosk-log-summary strong { color:#1e2a46; font-size:19px; }
+.kiosk-log-table-wrap { flex:1 1 auto; min-height:0; overflow:auto; border:1px solid #edf0f5; border-radius:9px; }
+.kiosk-log-table { min-width:430px; font-size:10px; }
+.kiosk-log-table thead th { position:sticky; top:0; z-index:1; background:#f7f8fb; color:#8290a8; font-size:8px; letter-spacing:.5px; text-transform:uppercase; border-bottom:1px solid #e8edf4; white-space:nowrap; }
+.kiosk-log-table td { padding:9px 8px; border-bottom:1px solid #f0f2f6; color:#39465d; white-space:nowrap; }
+.kiosk-log-table td:first-child { white-space:normal; min-width:125px; }
+.kiosk-log-table td:first-child strong,.kiosk-log-table td:first-child small { display:block; }
+.kiosk-log-table td:first-child small { color:#98a2b2; font-size:9px; margin-top:2px; }
+.kiosk-status-badge { display:inline-block; padding:4px 7px; border-radius:99px; background:#eef2f7; color:#5f6f86; font-size:8px; font-weight:800; }
+.kiosk-status-badge.present { background:#e4f7ed; color:#157447; }
+.kiosk-status-badge.late { background:#fff3d8; color:#986113; }
+.kiosk-status-badge.absent { background:#ffe7e8; color:#a52c37; }
+.kiosk-status-badge.on_leave { background:#eee9ff; color:#6250a2; }
+.kiosk-status-badge.half_day { background:#e7f0ff; color:#365f9a; }
+.kiosk-row-updated { animation:kioskRowFlash 1.8s ease-out; }
+.kiosk-empty-log { display:flex; min-height:180px; align-items:center; justify-content:center; flex-direction:column; gap:7px; color:#9aa5b6; text-align:center; }
+.kiosk-empty-log i { font-size:25px; color:#aaa5ef; }
+.kiosk-empty-log strong { color:#61708a; font-size:11px; }
+.kiosk-empty-log span { font-size:9px; }
+.kiosk-log-footer { flex:0 0 auto; padding-top:8px; color:#99a3b3; font-size:9px; }
+.kiosk-footerline { flex:0 0 auto; text-align:center; padding:5px 0 0; color:#9aa5b5; font-size:9px; }
+.kiosk-settings-dialog,.kiosk-exit-dialog { border:0; border-radius:16px; padding:0; width:min(880px,calc(100% - 28px)); max-height:calc(100vh - 36px); overflow:auto; box-shadow:0 24px 80px rgba(10,20,40,.32); }
+.kiosk-settings-dialog::backdrop,.kiosk-exit-dialog::backdrop { background:rgba(12,20,36,.72); backdrop-filter:blur(4px); }
+.kiosk-settings-inner { padding:22px; }
+.kiosk-settings-header { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:15px; }
+.kiosk-settings-header h2 { margin:0 0 4px; font-size:19px; font-weight:850; color:#17233d; }
+.kiosk-settings-header p { margin:0; color:#7f8ba0; font-size:10px; }
+.kiosk-dialog-close { border:0; background:#f1f3f8; color:#5b6880; border-radius:9px; width:34px; height:34px; }
+.kiosk-settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.kiosk-settings-card { border:1px solid #e9edf4; border-radius:11px; padding:14px; min-width:0; }
+.kiosk-settings-card h3 { margin:0 0 12px; color:#25324c; font-size:12px; font-weight:850; }
+.kiosk-settings-note { color:#7e899c; font-size:10px; line-height:1.55; margin:10px 0 0; }
+.kiosk-admin-form { display:grid; gap:7px; }
+.kiosk-admin-form label,.kiosk-settings-card label { color:#626f84; font-size:10px; font-weight:800; margin:3px 0 0; }
+.kiosk-admin-form .form-control,.kiosk-admin-form .form-select,.kiosk-device-row .form-select { min-height:37px; font-size:11px; }
+.kiosk-admin-form .btn { justify-self:start; margin-top:4px; font-size:10px; }
+.kiosk-form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.kiosk-exit-card { display:flex; flex-direction:column; align-items:flex-start; }
+.kiosk-settings-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid #edf0f5; color:#8994a7; font-size:10px; }
+.kiosk-settings-footer .btn { font-size:10px; }
+.kiosk-exit-dialog-inner { padding:24px; }
+.kiosk-exit-dialog h2 { font-size:19px; font-weight:850; color:#17233d; margin:0 0 8px; }
+.kiosk-exit-dialog p { font-size:11px; color:#748097; line-height:1.6; margin:0 0 18px; }
+.kiosk-exit-dialog label { display:block; font-weight:800; font-size:11px; color:#58657c; margin-bottom:7px; }
+.kiosk-exit-dialog input { width:100%; min-height:43px; border:1px solid #dfe5ef; border-radius:9px; padding:9px 11px; }
+.kiosk-exit-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+@media(max-width:900px) { .kiosk-workspace { grid-template-columns:minmax(0,1.15fr) minmax(290px,.85fr); } .kiosk-settings-grid { grid-template-columns:1fr; } }
+@media(max-width:680px) { .kiosk-topbar { padding:0 10px; } .kiosk-day { display:none; } .kiosk-main.kiosk-screen { padding:7px; height:calc(100vh - 56px); } .kiosk-heading { margin-bottom:6px; } .kiosk-heading p { display:none; } .kiosk-heading h1 { font-size:16px; } .kiosk-secure-pill { padding:5px 8px; font-size:8px; } .kiosk-workspace { grid-template-columns:1fr; grid-template-rows:minmax(0,1.45fr) minmax(140px,.8fr); gap:7px; } .kiosk-camera-panel,.kiosk-log-panel { padding:8px; } .kiosk-video-wrap { min-height:80px; } .kiosk-instructions { font-size:8px; } .kiosk-scan-statusline { font-size:8px; } .kiosk-log-table { min-width:390px; } #kiosk-result.kiosk-floating-result { top:62px; width:calc(100vw - 14px); min-height:58px; padding:11px 13px; font-size:13px; } #kiosk-result.kiosk-floating-result.success,#kiosk-result.kiosk-floating-result.error { font-size:14px; } .scan-feedback-symbol { width:84px; height:84px; font-size:46px; } }
+@media(max-height:650px) { .kiosk-main.kiosk-screen { padding-top:5px; } .kiosk-heading { margin-bottom:5px; } .kiosk-heading p { display:none; } .kiosk-camera-panel,.kiosk-log-panel { padding:8px; } .kiosk-instructions,.kiosk-footerline { display:none; } .kiosk-video-wrap { min-height:60px; } }
+
+    </style>
+</head>
+<body class="kiosk-standalone">
+<header class="kiosk-topbar">
+    <div class="kiosk-brand"><span class="kiosk-brand-mark"><i class="fa-solid fa-qrcode"></i></span><span>WorkTrack<small>SECURE ATTENDANCE TERMINAL</small></span></div>
+    <div class="kiosk-topbar-right"><span class="kiosk-day">{{ today|date:'D, d M Y' }}</span><span class="kiosk-locked"><i class="fa-solid fa-shield-halved me-1"></i> Secure scanner session</span></div>
+</header>
+<div id="kiosk-result" class="kiosk-result kiosk-floating-result" role="status" aria-live="assertive">Camera is starting. Please wait...</div>
+{% if messages %}<div id="kiosk-server-messages" hidden>{% for message in messages %}<span data-tags="{{ message.tags }}">{{ message }}</span>{% endfor %}</div>{% endif %}
+<div id="scan-feedback-overlay" class="scan-feedback-overlay" aria-hidden="true"><div id="scan-feedback-symbol" class="scan-feedback-symbol"><i class="fa-solid fa-check"></i></div><div id="scan-feedback-label" class="scan-feedback-label">SCAN CONFIRMED</div></div>
+
+<main class="kiosk-main kiosk-screen">
+    <div class="kiosk-heading">
+        <div><div class="role-kicker"><span id="kiosk-heading-date">{{ today|date:'l, F d, Y'|upper }}</span> · ADMINISTRATOR-OPERATED TERMINAL</div><h1>Live QR Attendance Scanner</h1><p>Present the employee's daily QR code to the camera. WorkTrack validates the token and updates today's attendance log automatically.</p></div>
+        <span class="kiosk-secure-pill"><i class="fa-solid fa-lock me-1"></i> Scanner-only mode</span>
+    </div>
+    <div class="kiosk-workspace">
+        <section class="panel-card kiosk-camera-panel" aria-label="QR scanner">
+            <div class="kiosk-panel-heading"><h3><i class="fa-solid fa-qrcode me-2 text-primary"></i>Camera scanner</h3><span id="kiosk-state" class="kiosk-state">Camera starting</span></div>
+            <div class="kiosk-video-wrap">
+                <video id="kiosk-video" autoplay muted playsinline aria-label="Live QR code camera preview"></video>
+                <div id="kiosk-scan-guide" class="kiosk-scan-guide" aria-hidden="true"><span class="kiosk-guide-label">PLACE THE FULL QR CODE INSIDE THE FRAME</span></div>
+                <div id="kiosk-camera-placeholder" class="kiosk-camera-placeholder"><i class="fa-solid fa-camera"></i><strong>Starting camera automatically</strong><br>Allow camera access if your browser asks for permission.</div>
+            </div>
+            <div class="kiosk-instructions"><i class="fa-solid fa-circle-info me-1"></i> Ask the employee to open today's QR, keep the whole code visible, and hold the phone steady until the green confirmation appears.</div>
+            <div class="kiosk-scan-statusline"><span><i class="fa-solid fa-bolt me-1"></i> Automatic scanning</span><span><i class="fa-solid fa-rotate me-1"></i> Ready for the next QR after each result</span></div>
+            <form id="kiosk-csrf-form" hidden>{% csrf_token %}</form>
+            <div id="kiosk-runtime-controls" hidden aria-hidden="true">
+                <button type="button" id="kiosk-start">Start scanner</button>
+                <button type="button" id="kiosk-stop">Stop scanner</button>
+                <button type="button" id="kiosk-glare">Reduce glare</button>
+                <div id="kiosk-camera-settings">
+                    <div id="kiosk-exposure-setting" hidden><output id="kiosk-exposure-value">Auto</output><input id="kiosk-exposure" type="range" min="-2" max="2" step="0.1" value="0"></div>
+                    <div id="kiosk-zoom-setting" hidden><output id="kiosk-zoom-value">1×</output><input id="kiosk-zoom" type="range" min="1" max="3" step="0.1" value="1"></div>
+                    <output id="kiosk-focus-value">Automatic focus</output>
+                </div>
+            </div>
+        </section>
+        <section class="panel-card kiosk-log-panel" aria-label="Today's attendance log">
+            <div class="kiosk-panel-heading kiosk-log-heading">
+                <div><h3><i class="fa-solid fa-clipboard-check me-2 text-primary"></i>Today's attendance log</h3><p>Records appear here immediately after a successful scan.</p></div>
+                <span class="kiosk-live-pill">LIVE</span>
+            </div>
+            <div class="kiosk-log-summary"><strong id="kiosk-log-count">{{ recent_records|length }}</strong><span>recent records for <span id="kiosk-log-date">{{ today|date:'M d, Y' }}</span></span></div>
+            <div class="kiosk-log-table-wrap">
+                <table class="table kiosk-log-table align-middle">
+                    <thead><tr><th>Employee</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr></thead>
+                    <tbody id="kiosk-log-body">
+                        {% for record in recent_records %}
+                        <tr data-record-id="{{ record.pk }}" data-employee-id="{{ record.employee.employee_id }}">
+                            <td><strong>{{ record.employee.full_name }}</strong><small>{{ record.employee.employee_id }}</small></td>
+                            <td>{{ record.check_in|date:'g:i A'|default:'—' }}</td>
+                            <td>{{ record.check_out|date:'g:i A'|default:'—' }}</td>
+                            <td><span class="kiosk-status-badge {{ record.status }}">{{ record.get_status_display }}</span></td>
+                        </tr>
+                        {% empty %}<tr id="kiosk-log-empty"><td colspan="4"><div class="kiosk-empty-log"><i class="fa-regular fa-calendar-check"></i><strong>No scans recorded yet</strong><span>Successful scans will appear here automatically.</span></div></td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="kiosk-log-footer"><i class="fa-solid fa-shield-halved me-1"></i> Attendance is validated and saved by WorkTrack.</div>
+        </section>
+    </div>
+    <div class="kiosk-footerline">WorkTrack · Secure Attendance Terminal · Settings are restricted to the activating Administrator.</div>
+</main>
+
+<dialog class="kiosk-exit-dialog" id="kiosk-settings-auth-dialog" aria-labelledby="kiosk-settings-auth-title">
+    <div class="kiosk-exit-dialog-inner">
+        <h2 id="kiosk-settings-auth-title"><i class="fa-solid fa-user-shield text-primary me-2"></i>Administrator settings</h2>
+        <p>Enter the password of the Administrator who activated this kiosk. Settings remain unlocked for ten minutes.</p>
+        <form id="kiosk-settings-auth-form">
+            {% csrf_token %}
+            <label for="kiosk-settings-password">Administrator password</label>
+            <input type="password" id="kiosk-settings-password" name="password" required autocomplete="current-password">
+            <div class="kiosk-exit-actions"><button type="button" id="kiosk-cancel-settings" class="btn btn-outline-secondary">Cancel</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-unlock me-1"></i> Unlock settings</button></div>
+        </form>
+    </div>
+</dialog>
+<dialog class="kiosk-settings-dialog" id="kiosk-settings-dialog" aria-labelledby="kiosk-settings-title">
+    <div class="kiosk-settings-inner">
+        <div class="kiosk-settings-header"><div><h2 id="kiosk-settings-title"><i class="fa-solid fa-sliders me-2"></i>Administrator settings</h2><p>Manage the camera or record attendance by employee ID.</p></div><button type="button" id="kiosk-close-settings" class="kiosk-dialog-close" aria-label="Close settings"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="kiosk-settings-grid">
+            <section class="kiosk-settings-card">
+                <h3><i class="fa-solid fa-camera me-2"></i>Camera device</h3>
+                <div class="kiosk-device-row"><div><label for="kiosk-camera-select">Available camera</label><select class="form-select" id="kiosk-camera-select" disabled><option value="">Default camera</option></select></div><button type="button" class="btn btn-outline-secondary" id="kiosk-refresh-cameras" disabled><i class="fa-solid fa-rotate me-1"></i>Refresh</button></div>
+                <button type="button" id="kiosk-restart-camera" class="btn btn-primary mt-3"><i class="fa-solid fa-rotate me-1"></i>Restart scanner</button>
+                <p class="kiosk-settings-note">Automatic focus and exposure adjustment are applied when supported by the camera. The scanner does not require manual glare or exposure controls.</p>
+            </section>
+            <section class="kiosk-settings-card">
+                <h3>Manual attendance</h3>
+                <form id="kiosk-manual-form" class="kiosk-admin-form" method="post" action="{% url 'eqrApp:attendance_kiosk_manual' %}">
+                    {% csrf_token %}
+                    <label for="manual-employee-id">Employee ID</label>
+                    <input id="manual-employee-id" name="employee_id" class="form-control" required autocomplete="off">
+                    <label for="manual-action">Attendance action</label>
+                    <select id="manual-action" name="action" class="form-select" required>
+                        <option value="">Select an action</option>
+                        <option value="check_in">Check in</option>
+                        <option value="check_out">Check out</option>
+                    </select>
+                    <button class="btn btn-primary" type="submit">Record attendance</button>
+                    <output id="manual-result" role="status" aria-live="polite"></output>
+                </form>
+            </section>
+            <section class="kiosk-settings-card kiosk-exit-card">
+                <h3><i class="fa-solid fa-door-open me-2"></i>Close kiosk session</h3>
+                <p class="kiosk-settings-note">Exiting ends the scanner-only session and returns to the Administrator dashboard. The activating Administrator must re-enter their password.</p>
+                <button type="button" id="kiosk-open-exit" class="btn btn-danger"><i class="fa-solid fa-lock me-1"></i>Exit kiosk</button>
+            </section>
+        </div>
+        <div class="kiosk-settings-footer"><span id="kiosk-settings-expiry">Settings unlocked temporarily</span><button type="button" id="kiosk-close-settings-bottom" class="btn btn-light">Close settings</button></div>
+    </div>
+</dialog>
+<dialog class="kiosk-exit-dialog" id="kiosk-exit-dialog" aria-labelledby="kiosk-exit-title">
+    <div class="kiosk-exit-dialog-inner">
+        <h2 id="kiosk-exit-title"><i class="fa-solid fa-shield-halved text-primary me-2"></i>Administrator exit verification</h2>
+        <p>Enter the password of the Administrator who activated this session. Incorrect attempts will temporarily lock kiosk exit.</p>
+        <form method="post" action="{{ exit_url }}">
+            {% csrf_token %}
+            <label for="kiosk-exit-password">Administrator password</label>
+            <input type="password" id="kiosk-exit-password" name="password" required autocomplete="current-password">
+            <div class="kiosk-exit-actions"><button type="button" id="kiosk-close-exit" class="btn btn-outline-secondary">Cancel</button><button type="submit" class="btn btn-danger"><i class="fa-solid fa-lock-open me-1"></i>Verify and exit</button></div>
+        </form>
+    </div>
+</dialog>
+
+<script src="{% static 'js/password-toggle.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.2.1/umd/zxing-browser.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/@zxing/browser@0.2.1'"></script>
+<script>
+(() => {
+    'use strict';
+
+    const video = document.getElementById('kiosk-video');
+    const placeholder = document.getElementById('kiosk-camera-placeholder');
+    const scanGuide = document.getElementById('kiosk-scan-guide');
+    const startButton = document.getElementById('kiosk-start');
+    const stopButton = document.getElementById('kiosk-stop');
+    const glareButton = document.getElementById('kiosk-glare');
+    const scannerState = document.getElementById('kiosk-state');
+    const refreshButton = document.getElementById('kiosk-refresh-cameras');
+    const cameraSelect = document.getElementById('kiosk-camera-select');
+    const resultBox = document.getElementById('kiosk-result');
+    const settingsPanel = document.getElementById('kiosk-camera-settings');
+    const exposureSetting = document.getElementById('kiosk-exposure-setting');
+    const exposureInput = document.getElementById('kiosk-exposure');
+    const exposureValue = document.getElementById('kiosk-exposure-value');
+    const zoomSetting = document.getElementById('kiosk-zoom-setting');
+    const zoomInput = document.getElementById('kiosk-zoom');
+    const zoomValue = document.getElementById('kiosk-zoom-value');
+    const focusValue = document.getElementById('kiosk-focus-value');
+    const csrfToken = document.querySelector('#kiosk-csrf-form input[name="csrfmiddlewaretoken"]').value;
+    const scanUrl = '{{ scan_url|escapejs }}';
+    const settingsUnlockUrl = '{{ settings_unlock_url|escapejs }}';
+    const settingsLockUrl = '{{ settings_lock_url|escapejs }}';
+    let todayIso = '{{ today|date:"Y-m-d" }}';
+    const logBody = document.getElementById('kiosk-log-body');
+    const logCount = document.getElementById('kiosk-log-count');
+    const scanOverlay = document.getElementById('scan-feedback-overlay');
+    const scanOverlaySymbol = document.getElementById('scan-feedback-symbol');
+    const scanOverlayLabel = document.getElementById('scan-feedback-label');
+
+    let cameraStream = null;
+    let cameraTrack = null;
+    let codeReader = null;
+    let cameraRunning = false;
+    let requestInProgress = false;
+    let lastHandledToken = '';
+    let lastHandledAt = 0;
+    let tokenMissingSince = null;
+    let notificationVersion = 0;
+    const TOKEN_CLEAR_DELAY_MS = 2600;
+    const TOKEN_MIN_HOLD_MS = 3200;
+    let selectedDeviceId = '';
+    let animationFrameId = null;
+    let lastFrameAt = 0;
+    let lastIdleMessageAt = 0;
+    let exposureRange = null;
+    let zoomRange = null;
+    let rawCanvas = document.createElement('canvas');
+    let rawContext = rawCanvas.getContext('2d', { willReadFrequently: true });
+    let cropCanvas = document.createElement('canvas');
+    let cropContext = cropCanvas.getContext('2d', { willReadFrequently: true });
+    let enhancedCanvas = document.createElement('canvas');
+    let enhancedContext = enhancedCanvas.getContext('2d', { willReadFrequently: true });
+    let thresholdCanvas = document.createElement('canvas');
+    let thresholdContext = thresholdCanvas.getContext('2d', { willReadFrequently: true });
+
+    function setScannerState(label, state) {
+        scannerState.textContent = label;
+        scannerState.className = 'kiosk-state' + (state ? ' ' + state : '');
+    }
+
+    function showResult(message, state) {
+        notificationVersion += 1;
+        resultBox.textContent = message;
+        resultBox.className = 'kiosk-result kiosk-floating-result' + (state ? ' ' + state : '');
+        return notificationVersion;
+    }
+    const serverMessage = document.querySelector('#kiosk-server-messages span');
+    if (serverMessage) {
+        const isError = /error|warning/i.test(serverMessage.dataset.tags || '');
+        showResult(serverMessage.textContent.trim(), isError ? 'error' : 'success');
+    }
+
+    function makeCell(value, className) {
+        const cell = document.createElement('td');
+        if (className) cell.className = className;
+        cell.textContent = value || '—';
+        return cell;
+    }
+
+    function flashScanConfirmation(kind, label) {
+        scanOverlay.className = 'scan-feedback-overlay visible' + (kind === 'error' ? ' error' : '');
+        scanOverlaySymbol.innerHTML = kind === 'error' ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-check"></i>';
+        scanOverlayLabel.textContent = label || (kind === 'error' ? 'SCAN NOT ACCEPTED' : 'SCAN CONFIRMED');
+        window.setTimeout(() => { scanOverlay.className = 'scan-feedback-overlay'; }, 1350);
+    }
+
+    function upsertAttendanceLog(data) {
+        if (!data || !data.record_id) return;
+        if (data.attendance_date !== todayIso) {
+            todayIso = data.attendance_date;
+            logBody.replaceChildren();
+            const day = new Date(todayIso + 'T12:00:00Z');
+            const format = options => day.toLocaleDateString('en-US', { ...options, timeZone: 'UTC' });
+            document.querySelector('.kiosk-day').textContent = format({weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'});
+            document.getElementById('kiosk-heading-date').textContent = format({dateStyle: 'full'}).toUpperCase();
+            document.getElementById('kiosk-log-date').textContent = format({dateStyle: 'medium'});
+        }
+        let row = logBody.querySelector(`tr[data-record-id="${data.record_id}"]`);
+        if (!row) {
+            const empty = document.getElementById('kiosk-log-empty');
+            if (empty) empty.remove();
+            row = document.createElement('tr');
+            row.dataset.recordId = String(data.record_id);
+        }
+        logBody.prepend(row);
+        row.dataset.employeeId = data.employee_id || '';
+        row.replaceChildren();
+        const employeeCell = document.createElement('td');
+        const employeeName = document.createElement('strong');
+        employeeName.textContent = data.employee_name || 'Employee';
+        const employeeCode = document.createElement('small');
+        employeeCode.textContent = data.employee_id || '';
+        employeeCell.append(employeeName, employeeCode);
+        row.append(employeeCell, makeCell(data.check_in), makeCell(data.check_out));
+        const statusCell = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'kiosk-status-badge ' + (data.status_code || 'present');
+        badge.textContent = data.status || 'Present';
+        statusCell.appendChild(badge);
+        row.appendChild(statusCell);
+        row.classList.remove('kiosk-row-updated');
+        void row.offsetWidth;
+        row.classList.add('kiosk-row-updated');
+        while (logBody.querySelectorAll('tr[data-record-id]').length > 20) {
+            const rows = logBody.querySelectorAll('tr[data-record-id]');
+            rows[rows.length - 1].remove();
+        }
+        logCount.textContent = String(logBody.querySelectorAll('tr[data-record-id]').length);
+    }
+
+    async function postKioskForm(url, form) {
+        const formData = new FormData(form);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+            body: new URLSearchParams(formData),
+            credentials: 'same-origin', cache: 'no-store'
+        });
+        let data;
+        try { data = await response.json(); }
+        catch (error) { throw new Error('The server returned an unreadable response. Refresh the kiosk and try again.'); }
+        if (!response.ok || !data.ok) throw new Error(data.message || 'The requested kiosk action was not accepted.');
+        return data;
+    }
+
+    function announceScannerReady(version) {
+        window.setTimeout(() => {
+            if (notificationVersion !== version || requestInProgress || !cameraRunning) return;
+            showResult('Scanner ready. Present the next employee QR code.', '');
+            setScannerState('Scanning', 'active');
+        }, 4000);
+    }
+
+    function resultText(result) {
+        if (!result) return '';
+        if (typeof result.getText === 'function') return result.getText();
+        return typeof result.text === 'string' ? result.text : '';
+    }
+
+    function isDecodeMiss(error) {
+        if (!error) return true;
+        const name = String(error.name || error.constructor?.name || '');
+        return /NotFound|Checksum|Format|ReaderException|ArgumentException/i.test(name);
+    }
+
+    function tryDecode(canvas) {
+        try {
+            const result = codeReader.decodeFromCanvas(canvas);
+            return resultText(result);
+        } catch (error) {
+            if (!isDecodeMiss(error)) console.warn('ZXing frame decode warning:', error);
+            return '';
+        }
+    }
+
+    function percentileFromHistogram(histogram, total, percentile) {
+        const target = Math.floor(total * percentile);
+        let accumulated = 0;
+        for (let i = 0; i < histogram.length; i += 1) {
+            accumulated += histogram[i];
+            if (accumulated >= target) return i;
+        }
+        return 255;
+    }
+
+    function buildEnhancedVariants(source) {
+        const sourceWidth = source.width;
+        const sourceHeight = source.height;
+        const cropSize = Math.max(1, Math.floor(Math.min(sourceWidth, sourceHeight) * 0.88));
+        const sourceX = Math.floor((sourceWidth - cropSize) / 2);
+        const sourceY = Math.floor((sourceHeight - cropSize) / 2);
+        const outputSize = Math.min(1200, Math.max(720, cropSize));
+
+        cropCanvas.width = outputSize;
+        cropCanvas.height = outputSize;
+        cropContext.imageSmoothingEnabled = true;
+        cropContext.imageSmoothingQuality = 'high';
+        cropContext.drawImage(source, sourceX, sourceY, cropSize, cropSize, 0, 0, outputSize, outputSize);
+
+        const imageData = cropContext.getImageData(0, 0, outputSize, outputSize);
+        const pixels = imageData.data;
+        const total = outputSize * outputSize;
+        const luminance = new Uint8Array(total);
+        const histogram = new Uint32Array(256);
+
+        for (let i = 0, p = 0; i < total; i += 1, p += 4) {
+            const gray = Math.max(0, Math.min(255, Math.round(
+                pixels[p] * 0.299 + pixels[p + 1] * 0.587 + pixels[p + 2] * 0.114
+            )));
+            luminance[i] = gray;
+            histogram[gray] += 1;
+        }
+
+        // Stretch tonal range using percentiles so a bright phone screen has stronger QR contrast.
+        const low = percentileFromHistogram(histogram, total, 0.02);
+        const high = percentileFromHistogram(histogram, total, 0.98);
+        const range = Math.max(24, high - low);
+        const normalized = new Uint8Array(total);
+
+        for (let i = 0; i < total; i += 1) {
+            let value = Math.max(0, Math.min(255, ((luminance[i] - low) * 255) / range));
+            // A mild gamma adjustment lifts darker modules without whitening the entire frame.
+            value = Math.pow(value / 255, 0.92) * 255;
+            normalized[i] = Math.max(0, Math.min(255, Math.round(value)));
+        }
+
+        // Mild unsharp masking helps recover module edges from slight focus softness.
+        const sharpened = new Uint8Array(total);
+        for (let y = 0; y < outputSize; y += 1) {
+            for (let x = 0; x < outputSize; x += 1) {
+                const index = y * outputSize + x;
+                if (x === 0 || y === 0 || x === outputSize - 1 || y === outputSize - 1) {
+                    sharpened[index] = normalized[index];
+                    continue;
+                }
+                const neighborAverage = (
+                    normalized[index - 1] + normalized[index + 1] +
+                    normalized[index - outputSize] + normalized[index + outputSize]
+                ) / 4;
+                sharpened[index] = Math.max(0, Math.min(255,
+                    Math.round(normalized[index] + (normalized[index] - neighborAverage) * 0.65)
+                ));
+            }
+        }
+
+        const enhancedData = enhancedContext.createImageData(outputSize, outputSize);
+        const thresholdData = thresholdContext.createImageData(outputSize, outputSize);
+        const sharpenHistogram = new Uint32Array(256);
+        for (let i = 0; i < total; i += 1) sharpenHistogram[sharpened[i]] += 1;
+        const threshold = otsuThreshold(sharpenHistogram, total);
+
+        for (let i = 0, p = 0; i < total; i += 1, p += 4) {
+            const value = sharpened[i];
+            enhancedData.data[p] = value;
+            enhancedData.data[p + 1] = value;
+            enhancedData.data[p + 2] = value;
+            enhancedData.data[p + 3] = 255;
+
+            const binary = value >= threshold ? 255 : 0;
+            thresholdData.data[p] = binary;
+            thresholdData.data[p + 1] = binary;
+            thresholdData.data[p + 2] = binary;
+            thresholdData.data[p + 3] = 255;
+        }
+
+        enhancedCanvas.width = outputSize;
+        enhancedCanvas.height = outputSize;
+        enhancedContext.putImageData(enhancedData, 0, 0);
+        thresholdCanvas.width = outputSize;
+        thresholdCanvas.height = outputSize;
+        thresholdContext.putImageData(thresholdData, 0, 0);
+    }
+
+    function otsuThreshold(histogram, total) {
+        let sum = 0;
+        for (let i = 0; i < 256; i += 1) sum += i * histogram[i];
+        let sumBackground = 0;
+        let weightBackground = 0;
+        let bestVariance = -1;
+        let bestThreshold = 127;
+
+        for (let threshold = 0; threshold < 256; threshold += 1) {
+            weightBackground += histogram[threshold];
+            if (weightBackground === 0) continue;
+            const weightForeground = total - weightBackground;
+            if (weightForeground === 0) break;
+            sumBackground += threshold * histogram[threshold];
+            const meanBackground = sumBackground / weightBackground;
+            const meanForeground = (sum - sumBackground) / weightForeground;
+            const variance = weightBackground * weightForeground *
+                Math.pow(meanBackground - meanForeground, 2);
+            if (variance > bestVariance) {
+                bestVariance = variance;
+                bestThreshold = threshold;
+            }
+        }
+        return bestThreshold;
+    }
+
+    async function submitToken(token) {
+        if (!token || requestInProgress) return;
+        requestInProgress = true;
+        setScannerState('Recording attendance', 'busy');
+        showResult('QR recognized. Verifying the daily credential and saving attendance...', '');
+
+        try {
+            const response = await fetch(scanUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams({ token }),
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
+            let data;
+            try {
+                data = await response.json();
+            } catch (parseError) {
+                throw new Error('The server returned an unreadable response. Check your connection and sign in again if the session expired.');
+            }
+            if (!response.ok || !data.ok) {
+                const version = showResult(data.message || 'The QR code could not be accepted.', 'error');
+                flashScanConfirmation('error', 'QR NOT ACCEPTED');
+                setScannerState(cameraRunning ? 'Scanning' : 'Camera stopped', cameraRunning ? 'active' : '');
+                if (cameraRunning) announceScannerReady(version);
+            } else {
+                upsertAttendanceLog(data);
+                const actionLabel = data.action === 'check_in' ? 'CHECK-IN' : 'CHECK-OUT';
+                const version = showResult(`${actionLabel} successful · ${data.employee_name} (${data.employee_id}) · Check-in ${data.check_in || '—'} · Check-out ${data.check_out || '—'} · ${data.status}. Attendance log updated.`, 'success');
+                flashScanConfirmation('success', 'ATTENDANCE RECORDED');
+                setScannerState(cameraRunning ? 'Scanning' : 'Camera stopped', cameraRunning ? 'active' : '');
+                announceScannerReady(version);
+            }
+        } catch (error) {
+            const version = showResult(error && error.message ? error.message : 'The scan request failed. Check the kiosk connection and try again.', 'error');
+            flashScanConfirmation('error', 'SCAN FAILED');
+            setScannerState(cameraRunning ? 'Scanning' : 'Camera stopped', cameraRunning ? 'active' : '');
+            if (cameraRunning) announceScannerReady(version);
+        } finally {
+            requestInProgress = false;
+        }
+    }
+
+    function handleDecodedQr(token) {
+        if (!token || requestInProgress) return;
+        const now = Date.now();
+        if (token === lastHandledToken) {
+            // The same QR is still in the camera frame. Do not submit it a second time.
+            tokenMissingSince = null;
+            return;
+        }
+        // A different employee QR is accepted immediately after the previous request finishes.
+        lastHandledToken = token;
+        lastHandledAt = now;
+        tokenMissingSince = null;
+        submitToken(token);
+    }
+
+    function scheduleNextFrame() {
+        if (cameraRunning) animationFrameId = window.requestAnimationFrame(decodeFrame);
+    }
+
+    function decodeFrame(timestamp) {
+        if (!cameraRunning) return;
+        if (!video.videoWidth || !video.videoHeight || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+            scheduleNextFrame();
+            return;
+        }
+        if (timestamp - lastFrameAt < 150) {
+            scheduleNextFrame();
+            return;
+        }
+        lastFrameAt = timestamp;
+
+        const scale = Math.min(1, 1280 / video.videoWidth);
+        const frameWidth = Math.max(1, Math.round(video.videoWidth * scale));
+        const frameHeight = Math.max(1, Math.round(video.videoHeight * scale));
+        if (rawCanvas.width !== frameWidth || rawCanvas.height !== frameHeight) {
+            rawCanvas.width = frameWidth;
+            rawCanvas.height = frameHeight;
+        }
+        rawContext.drawImage(video, 0, 0, frameWidth, frameHeight);
+
+        if (!requestInProgress && !settingsDialog.open && !settingsAuthDialog.open && !exitDialog.open) {
+            let decoded = tryDecode(rawCanvas);
+            if (!decoded) {
+                try {
+                    buildEnhancedVariants(rawCanvas);
+                    decoded = tryDecode(enhancedCanvas);
+                    if (!decoded) decoded = tryDecode(thresholdCanvas);
+                } catch (error) {
+                    console.warn('ZXing image enhancement fallback failed:', error);
+                }
+            }
+
+            const now = Date.now();
+            if (decoded) {
+                if (decoded === lastHandledToken) {
+                    // Repeated frames of the same QR keep the duplicate-scan guard active.
+                    tokenMissingSince = null;
+                } else {
+                    handleDecodedQr(decoded);
+                }
+            } else if (lastHandledToken) {
+                if (tokenMissingSince === null) tokenMissingSince = now;
+                const codeHasBeenRemoved = now - tokenMissingSince >= TOKEN_CLEAR_DELAY_MS;
+                const minimumHoldElapsed = now - lastHandledAt >= TOKEN_MIN_HOLD_MS;
+                if (codeHasBeenRemoved && minimumHoldElapsed) {
+                    lastHandledToken = '';
+                    tokenMissingSince = null;
+                }
+            } else if (now - lastIdleMessageAt > 9000) {
+                lastIdleMessageAt = now;
+                showResult('Ready to scan. Center the full QR code in the guide and hold the phone steady.', '');
+                setScannerState('Scanning', 'active');
+            }
+        }
+        scheduleNextFrame();
+    }
+
+    function getConstraintValues(range) {
+        if (!range || typeof range.min !== 'number' || typeof range.max !== 'number') return null;
+        return {
+            min: range.min,
+            max: range.max,
+            step: typeof range.step === 'number' && range.step > 0 ? range.step : 0.1
+        };
+    }
+
+    async function configureCameraCapabilities() {
+        if (!cameraTrack || typeof cameraTrack.getCapabilities !== 'function') return;
+        let capabilities = {};
+        try { capabilities = cameraTrack.getCapabilities() || {}; } catch (error) { capabilities = {}; }
+        const automatic = [];
+        if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) automatic.push({ focusMode: 'continuous' });
+        if (Array.isArray(capabilities.exposureMode) && capabilities.exposureMode.includes('continuous')) automatic.push({ exposureMode: 'continuous' });
+        if (Array.isArray(capabilities.whiteBalanceMode) && capabilities.whiteBalanceMode.includes('continuous')) automatic.push({ whiteBalanceMode: 'continuous' });
+        if (automatic.length) {
+            try { await cameraTrack.applyConstraints({ advanced: automatic }); } catch (error) { console.info('Automatic camera mode is partly unsupported.', error); }
+        }
+        // If the webcam exposes exposure compensation, reduce it gently to limit bright-screen glare.
+        exposureRange = getConstraintValues(capabilities.exposureCompensation);
+        if (exposureRange) {
+            const target = Math.max(exposureRange.min, Math.min(exposureRange.max, -0.5));
+            try { await cameraTrack.applyConstraints({ advanced: [{ exposureCompensation: target }] }); } catch (error) { console.info('Automatic exposure adjustment is unsupported.', error); }
+        }
+        zoomRange = getConstraintValues(capabilities.zoom);
+        // Zoom is not changed automatically; an aggressive digital zoom can crop QR finder patterns.
+        settingsPanel.style.display = 'none';
+    }
+
+    async function applyExposure(value) {
+        if (!cameraTrack || !exposureRange) return false;
+        const bounded = Math.max(exposureRange.min, Math.min(exposureRange.max, Number(value)));
+        try {
+            await cameraTrack.applyConstraints({ advanced: [{ exposureCompensation: bounded }] });
+            exposureInput.value = String(bounded);
+            exposureValue.textContent = `${bounded.toFixed(1)} EV`;
+            return true;
+        } catch (error) {
+            showResult('This camera does not allow exposure compensation from the browser. Lower the phone screen brightness and avoid reflections.', 'error');
+            return false;
+        }
+    }
+
+    async function applyZoom(value) {
+        if (!cameraTrack || !zoomRange) return;
+        const bounded = Math.max(zoomRange.min, Math.min(zoomRange.max, Number(value)));
+        try {
+            await cameraTrack.applyConstraints({ advanced: [{ zoom: bounded }] });
+            zoomInput.value = String(bounded);
+            zoomValue.textContent = `${bounded.toFixed(1)}×`;
+        } catch (error) {
+            showResult('This camera does not support browser-controlled zoom. Move the phone slightly closer while keeping the full QR inside the guide.', 'error');
+        }
+    }
+
+    async function refreshCameraList() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        let devices = [];
+        try {
+            devices = await navigator.mediaDevices.enumerateDevices();
+        } catch (error) {
+            cameraSelect.disabled = true;
+            refreshButton.disabled = true;
+            return;
+        }
+        const cameras = devices.filter(device => device.kind === 'videoinput');
+        const previous = selectedDeviceId || (cameraTrack && cameraTrack.getSettings().deviceId) || '';
+        cameraSelect.innerHTML = '';
+        cameras.forEach((camera, index) => {
+            const option = document.createElement('option');
+            option.value = camera.deviceId;
+            option.textContent = camera.label || `Camera ${index + 1}`;
+            cameraSelect.appendChild(option);
+        });
+        if (previous && cameras.some(camera => camera.deviceId === previous)) {
+            cameraSelect.value = previous;
+        } else if (cameraTrack && cameraTrack.getSettings().deviceId) {
+            cameraSelect.value = cameraTrack.getSettings().deviceId;
+        }
+        cameraSelect.disabled = cameras.length === 0;
+        refreshButton.disabled = cameras.length === 0;
+    }
+
+    function cameraErrorMessage(error) {
+        const name = error && error.name ? error.name : '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') return 'Camera permission was denied. Allow camera access for this site in the browser settings, then try again.';
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'No camera was found. Connect or enable a webcam, then refresh the camera list.';
+        if (name === 'NotReadableError' || name === 'TrackStartError') return 'The camera is being used by another application. Close other camera apps and try again.';
+        if (name === 'OverconstrainedError') return 'The selected camera cannot meet the requested video settings. Choose another camera or reconnect it.';
+        if (name === 'SecurityError' || name === 'TypeError') return 'Camera access requires a secure browser context. Open the kiosk on localhost or through HTTPS.';
+        return 'The camera could not start. Check permission, close other camera applications, and try again.';
+    }
+
+    async function startCamera() {
+        if (!window.ZXingBrowser || !window.ZXingBrowser.BrowserQRCodeReader) {
+            showResult('The ZXing library could not be loaded. Check the kiosk internet connection, refresh the page, and try again.', 'error');
+            return;
+        }
+        if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showResult('Camera access requires a secure connection. Open the local sign-in page from Start-WorkTrack.cmd on the kiosk laptop, or use an HTTPS address.', 'error');
+            return;
+        }
+        if (cameraRunning || requestInProgress) return;
+
+        startButton.disabled = true;
+        cameraSelect.disabled = true;
+        refreshButton.disabled = true;
+        showResult('Requesting camera permission and starting ZXing...', '');
+        try {
+            const videoConstraints = {
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                frameRate: { ideal: 24, max: 30 }
+            };
+            if (selectedDeviceId) videoConstraints.deviceId = { exact: selectedDeviceId };
+
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
+            } catch (firstError) {
+                // Some laptop webcams reject the preferred resolution/frame-rate; retry with basic constraints.
+                const fallbackVideo = selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true;
+                cameraStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: fallbackVideo });
+            }
+
+            cameraTrack = cameraStream.getVideoTracks()[0];
+            video.srcObject = cameraStream;
+            await video.play();
+            codeReader = new window.ZXingBrowser.BrowserQRCodeReader();
+            await refreshCameraList();
+            await configureCameraCapabilities();
+
+            cameraRunning = true;
+            lastHandledToken = '';
+            tokenMissingSince = null;
+            video.style.display = 'block';
+            scanGuide.style.display = 'block';
+            placeholder.style.display = 'none';
+            stopButton.disabled = false;
+            cameraSelect.disabled = false;
+            refreshButton.disabled = false;
+            setScannerState('Scanning', 'active');
+            showResult('Scanner active. Present an employee QR code; successful scans will appear in the log automatically.', '');
+            lastFrameAt = 0;
+            scheduleNextFrame();
+        } catch (error) {
+            console.error('WorkTrack kiosk camera error:', error);
+            if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+            cameraTrack = null;
+            video.srcObject = null;
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            cameraSelect.disabled = false;
+            refreshButton.disabled = false;
+            setScannerState('Camera stopped', '');
+            showResult(cameraErrorMessage(error), 'error');
+        }
+    }
+
+    async function stopCamera() {
+        cameraRunning = false;
+        if (animationFrameId !== null) {
+            window.cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+        cameraTrack = null;
+        video.pause();
+        video.srcObject = null;
+        video.style.display = 'none';
+        scanGuide.style.display = 'none';
+        placeholder.style.display = 'block';
+        startButton.disabled = false;
+        stopButton.disabled = true;
+        cameraSelect.disabled = false;
+        refreshButton.disabled = false;
+        settingsPanel.style.display = 'none';
+        glareButton.disabled = true;
+        exposureRange = null;
+        zoomRange = null;
+        lastHandledToken = '';
+        tokenMissingSince = null;
+        setScannerState('Camera stopped', '');
+        if (codeReader && typeof codeReader.reset === 'function') {
+            try { codeReader.reset(); } catch (error) { /* release the camera regardless */ }
+        }
+        showResult('Scanner paused. Use Administrator settings to restart the camera.', '');
+    }
+
+    async function switchCamera() {
+        selectedDeviceId = cameraSelect.value;
+        if (!cameraRunning) return;
+        await stopCamera();
+        await startCamera();
+    }
+
+    startButton.addEventListener('click', startCamera);
+    stopButton.addEventListener('click', stopCamera);
+    glareButton.addEventListener('click', async () => { await configureCameraCapabilities(); });
+    exposureInput.addEventListener('input', () => {
+        exposureValue.textContent = `${Number(exposureInput.value).toFixed(1)} EV`;
+    });
+    exposureInput.addEventListener('change', () => applyExposure(exposureInput.value));
+    zoomInput.addEventListener('input', () => {
+        zoomValue.textContent = `${Number(zoomInput.value).toFixed(1)}×`;
+    });
+    zoomInput.addEventListener('change', () => applyZoom(zoomInput.value));
+    window.addEventListener('pagehide', () => {
+        cameraRunning = false;
+        if (animationFrameId !== null) window.cancelAnimationFrame(animationFrameId);
+        if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+    });
+
+    if (!window.ZXingBrowser) {
+        showResult('ZXing is loading. If this message remains, check the internet connection and refresh the kiosk page.', '');
+    }
+
+    // Keep browser Back navigation inside the kiosk; server middleware enforces all other app routes.
+    history.pushState({ worktrackKiosk: true }, '', window.location.href);
+    window.addEventListener('popstate', () => {
+        history.pushState({ worktrackKiosk: true }, '', window.location.href);
+    });
+
+    const exitDialog = document.getElementById('kiosk-exit-dialog');
+    const settingsAuthDialog = document.getElementById('kiosk-settings-auth-dialog');
+    const settingsDialog = document.getElementById('kiosk-settings-dialog');
+    const settingsAuthForm = document.getElementById('kiosk-settings-auth-form');
+    const settingsPassword = document.getElementById('kiosk-settings-password');
+    const settingsExpiry = document.getElementById('kiosk-settings-expiry');
+    const exitPassword = document.getElementById('kiosk-exit-password');
+    const exitForm = exitDialog.querySelector('form');
+
+    function openSettingsAuthentication() {
+        if (!settingsAuthDialog.open && !settingsDialog.open) {
+            settingsAuthDialog.showModal();
+            settingsPassword.focus();
+        }
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.ctrlKey && (event.code === 'Digit0' || event.key === '0')) {
+            event.preventDefault();
+            openSettingsAuthentication();
+            return;
+        }
+        const blockedCtrlKeys = ['KeyL', 'KeyW', 'KeyR', 'KeyT', 'KeyN', 'KeyO', 'KeyS', 'KeyP'];
+        if (event.ctrlKey && blockedCtrlKeys.includes(event.code)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
+        if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'F4')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
+        // Avoid browser context menus on the public-facing kiosk surface.
+        if (event.key === 'Escape' && (settingsDialog.open || settingsAuthDialog.open)) {
+            event.preventDefault();
+        }
+    });
+    document.addEventListener('contextmenu', (event) => event.preventDefault());
+
+    document.getElementById('kiosk-cancel-settings').addEventListener('click', () => settingsAuthDialog.close());
+    settingsAuthDialog.addEventListener('close', () => { settingsPassword.value = ''; });
+    settingsAuthForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+            const data = await postKioskForm(settingsUnlockUrl, settingsAuthForm);
+            settingsAuthDialog.close();
+            settingsDialog.showModal();
+            settingsExpiry.textContent = `Settings unlocked for ${Math.floor(data.expires_in / 60)} minutes.`;
+            if (settingsUnlockTimer) window.clearTimeout(settingsUnlockTimer);
+            settingsUnlockTimer = window.setTimeout(() => {
+                closeSettingsDialog();
+                showResult('Administrator settings have expired and were locked automatically.', '');
+            }, data.expires_in * 1000);
+            await refreshCameraList();
+        } catch (error) {
+            settingsPassword.value = '';
+            showResult(error.message || 'Administrator verification failed.', 'error');
+            flashScanConfirmation('error', 'ADMINISTRATOR VERIFICATION FAILED');
+        }
+    });
+
+    let preserveSettingsUnlockForExit = false;
+    let settingsUnlockTimer = null;
+    async function lockKioskSettings() {
+        try {
+            await fetch(settingsLockUrl, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+                body: new URLSearchParams({}), credentials: 'same-origin', cache: 'no-store', keepalive: true
+            });
+        } catch (error) { console.info('Kiosk settings lock request could not be confirmed.', error); }
+    }
+    function closeSettingsDialog() { if (settingsDialog.open) settingsDialog.close(); }
+    settingsDialog.addEventListener('close', () => {
+        if (settingsUnlockTimer) window.clearTimeout(settingsUnlockTimer);
+        settingsUnlockTimer = null;
+        if (!preserveSettingsUnlockForExit) lockKioskSettings();
+        preserveSettingsUnlockForExit = false;
+    });
+    document.getElementById('kiosk-close-settings').addEventListener('click', closeSettingsDialog);
+    document.getElementById('kiosk-close-settings-bottom').addEventListener('click', closeSettingsDialog);
+
+    const manualForm = document.getElementById('kiosk-manual-form');
+    const manualResult = document.getElementById('manual-result');
+    settingsDialog.addEventListener('close', () => {
+        manualForm.reset();
+        manualResult.textContent = '';
+    });
+    manualForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = manualForm.querySelector('button[type="submit"]');
+        if (button.disabled) return;
+        button.disabled = true;
+        manualResult.textContent = 'Saving attendance…';
+        try {
+            const data = await postKioskForm(manualForm.getAttribute('action'), manualForm);
+            upsertAttendanceLog(data);
+            manualForm.reset();
+            manualResult.textContent = data.message;
+        } catch (error) {
+            manualResult.textContent = error.message;
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    document.getElementById('kiosk-restart-camera').addEventListener('click', async () => {
+        await stopCamera();
+        await startCamera();
+        await refreshCameraList();
+        if (cameraRunning) showResult('Camera restarted using the selected device.', '');
+    });
+    refreshButton.addEventListener('click', () => refreshCameraList().catch(() => showResult('Could not refresh the camera list.', 'error')));
+    cameraSelect.addEventListener('change', switchCamera);
+
+    let kioskExitSubmitted = false;
+    document.getElementById('kiosk-open-exit').addEventListener('click', () => {
+        preserveSettingsUnlockForExit = true;
+        settingsDialog.close();
+        exitDialog.showModal();
+        exitPassword.focus();
+    });
+    document.getElementById('kiosk-close-exit').addEventListener('click', () => exitDialog.close());
+    exitDialog.addEventListener('close', () => {
+        exitPassword.value = '';
+        if (!kioskExitSubmitted) openSettingsAuthentication();
+    });
+    exitForm.addEventListener('submit', () => { kioskExitSubmitted = true; window.worktrackKioskExitRequested = true; stopCamera(); });
+    window.addEventListener('beforeunload', (event) => {
+        if (!window.worktrackKioskExitRequested) {
+            event.preventDefault();
+            event.returnValue = '';
+        }
+    });
+    window.addEventListener('pagehide', () => {
+        if (settingsDialog.open) lockKioskSettings();
+    });
+
+    // Auto-start scanning as soon as the dedicated, authenticated kiosk page loads.
+    async function waitForZXingAndStart(attempt) {
+        if (window.ZXingBrowser && window.ZXingBrowser.BrowserQRCodeReader) {
+            await startCamera();
+            return;
+        }
+        if (attempt >= 40) {
+            showResult('ZXing could not be loaded. Check the classroom internet connection and press Ctrl+0 to open Administrator camera settings.', 'error');
+            setScannerState('Scanner library unavailable', '');
+            return;
+        }
+        window.setTimeout(() => waitForZXingAndStart(attempt + 1), 250);
+    }
+    window.addEventListener('load', () => window.setTimeout(() => waitForZXingAndStart(0), 250), { once: true });
+})();
+</script>
+</body>
+</html>

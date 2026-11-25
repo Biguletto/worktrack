@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}System Overview | WorkTrack{% endblock %}
+{% block content %}
+<div class="welcome-row">
+    <div>
+        <div class="role-kicker"><i class="fa-solid fa-shield-halved me-1"></i> IT PERSONNEL · SYSTEM OVERSIGHT</div>
+        <h2>System overview</h2>
+        <p>Monitor application health, access events, and attendance activity. HR remains responsible for employee and leave operations.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'eqrApp:system_logs' %}"><i class="fa-solid fa-clipboard-list me-2"></i>Open system logs</a>
+</div>
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon icon-purple"><i class="fa-solid fa-users"></i></div><div class="stat-label">Active user accounts</div><div class="stat-value">{{ active_account_count }}</div><div class="stat-foot">Enabled WorkTrack accounts</div></div>
+    <div class="stat-card"><div class="stat-icon icon-blue"><i class="fa-solid fa-right-to-bracket"></i></div><div class="stat-label">Today's check-ins</div><div class="stat-value">{{ today_checkins }}</div><div class="stat-foot">{{ today|date:'F d, Y' }}</div></div>
+    <div class="stat-card"><div class="stat-icon icon-green"><i class="fa-solid fa-right-from-bracket"></i></div><div class="stat-label">Today's check-outs</div><div class="stat-value">{{ today_checkouts }}</div><div class="stat-foot">Completed departures</div></div>
+    <div class="stat-card"><div class="stat-icon icon-orange"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="stat-label">System errors · 30 days</div><div class="stat-value">{{ system_error_count }}</div><div class="stat-foot">Warnings: {{ security_event_count }}</div></div>
+</div>
+<div class="dashboard-grid">
+    <section class="panel-card">
+        <div class="panel-heading"><div><h3>Recent system events</h3><p>Application errors and security-relevant access events</p></div><a href="{% url 'eqrApp:system_logs' %}" class="text-link">View all logs <i class="fa-solid fa-arrow-right"></i></a></div>
+        <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Time</th><th>Severity</th><th>System event</th></tr></thead><tbody>
+        {% for event in recent_events %}<tr><td>{{ event.created_at|date:'M d, g:i A' }}</td><td><span class="status-pill status-{{ event.safe_severity_class }}">{{ event.safe_severity }}</span></td><td>{{ event.safe_summary }}</td></tr>
+        {% empty %}<tr><td colspan="3"><div class="empty-state"><strong>No system events recorded</strong><span>Application errors and access events will appear here.</span></div></td></tr>{% endfor %}
+        </tbody></table></div>
+    </section>
+    <section class="panel-card quick-panel">
+        <div class="panel-heading"><div><h3>IT tools</h3><p>System monitoring and attendance controls</p></div></div>
+        <div class="system-shortcut-list">
+            <a href="{% url 'eqrApp:system_logs' %}"><i class="fa-solid fa-clipboard-list"></i><span><strong>System logs and errors</strong><small>Review access denials, login failures, and HTTP errors</small></span><i class="fa-solid fa-chevron-right"></i></a>
+            <a href="{% url 'eqrApp:attendance_list' %}"><i class="fa-regular fa-clock"></i><span><strong>Attendance logs</strong><small>Inspect attendance records by employee</small></span><i class="fa-solid fa-chevron-right"></i></a>
+            <a href="{% url 'eqrApp:attendance_kiosk' %}"><i class="fa-solid fa-qrcode"></i><span><strong>Activate secure QR kiosk</strong><small>Open the standalone scanner after confirming your Administrator password</small></span><i class="fa-solid fa-arrow-right"></i></a>
+            <a href="{% url 'eqrApp:change_password' %}"><i class="fa-solid fa-key"></i><span><strong>Change administrator password</strong><small>Maintain your own administrator credentials</small></span><i class="fa-solid fa-chevron-right"></i></a>
+        </div>
+        <div class="admin-note"><i class="fa-solid fa-circle-info"></i><span>Administrator access is reserved for IT oversight, sanitized warning/error logs, employee account support limited to name, username, and password resets, and QR kiosk operation. Attendance and leave records are read-only; employee hiring, profile management, leave decisions, balances, and holidays are HR responsibilities.</span></div>
+    </section>
+</div>
+
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Supervisor Dashboard | WorkTrack{% endblock %}
+{% block content %}
+<div class="welcome-row">
+    <div>
+        <div class="role-kicker"><i class="fa-solid fa-people-group me-1"></i> SUPERVISOR WORKSPACE</div>
+        <h2>Good day, {{ request.user.first_name|default:request.user.username }}.</h2>
+        <p>Position: {{ employee.position }} · Department: {{ employee.department }} · Employee ID {{ employee.employee_id }}</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'eqrApp:approval_queue' %}"><i class="fa-solid fa-list-check me-2"></i>Review team requests</a>
+</div>
+{% include 'attendance_qr_card.html' %}
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon icon-purple"><i class="fa-solid fa-users"></i></div><div class="stat-label">Active team members</div><div class="stat-value">{{ team_count }}</div><div class="stat-foot">Employees assigned to you</div></div>
+    <div class="stat-card"><div class="stat-icon icon-blue"><i class="fa-regular fa-clock"></i></div><div class="stat-label">Team checked in</div><div class="stat-value">{{ team_checked_in }}</div><div class="stat-foot">Today's recorded check-ins</div></div>
+    <div class="stat-card"><div class="stat-icon icon-orange"><i class="fa-solid fa-hourglass-half"></i></div><div class="stat-label">Late arrivals</div><div class="stat-value">{{ team_late_count }}</div><div class="stat-foot">Based on recorded attendance</div></div>
+    <div class="stat-card"><div class="stat-icon icon-green"><i class="fa-regular fa-calendar-check"></i></div><div class="stat-label">Team on leave</div><div class="stat-value">{{ team_on_leave_count }}</div><div class="stat-foot">Approved leave covering today</div></div>
+</div>
+{% if leave_balances %}
+<section class="panel-card mb-4"><div class="panel-heading"><div><h3>My leave balances</h3><p>Configured entitlement for {{ today.year }}</p></div></div><div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Leave type</th><th>Entitled</th><th>Used</th><th>Available</th></tr></thead><tbody>{% for balance in leave_balances %}<tr><td><strong>{{ balance.leave_type.name }}</strong></td><td>{{ balance.entitled_days }}</td><td>{{ balance.used_days }}</td><td><strong>{{ balance.available_days }}</strong></td></tr>{% endfor %}</tbody></table></div></section>
+{% endif %}
+<div class="dashboard-grid">
+    <section class="panel-card">
+        <div class="panel-heading"><div><h3>Requests awaiting your review</h3><p>Leave applications submitted by direct reports</p></div><a href="{% url 'eqrApp:approval_queue' %}" class="text-link">Open queue <i class="fa-solid fa-arrow-right"></i></a></div>
+        {% if team_pending_applications %}
+            <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Employee</th><th>Leave type</th><th>Dates</th><th>Days</th><th></th></tr></thead><tbody>
+            {% for application in team_pending_applications %}
+                <tr><td><strong>{{ application.employee.full_name }}</strong><small class="table-sub">{{ application.employee.employee_id }}</small></td><td>{{ application.leave_type.name }}</td><td>{{ application.start_date|date:'M d' }} - {{ application.end_date|date:'M d, Y' }}</td><td>{{ application.requested_days }}</td><td><a class="btn btn-sm btn-primary" href="{% url 'eqrApp:leave_detail' application.pk %}">Review</a></td></tr>
+            {% endfor %}
+            </tbody></table></div>
+        {% else %}<div class="empty-state"><i class="fa-solid fa-check-double"></i><strong>No requests waiting for you</strong><span>New team leave requests will appear here.</span></div>{% endif %}
+    </section>
+    <section class="panel-card quick-panel">
+        <div class="panel-heading"><div><h3>Team overview</h3><p>Assigned employees</p></div></div>
+        {% if team_members %}
+            {% for member in team_members %}
+                <div class="team-member-row"><span class="person-avatar">{{ member.user.first_name|default:member.user.username|first|upper }}</span><span class="team-member-copy"><strong>{{ member.full_name }}</strong><small>Position: {{ member.position }} · {{ member.employee_id }}</small></span></div>
+            {% endfor %}
+        {% else %}<div class="empty-state compact-empty"><i class="fa-solid fa-user-group"></i><strong>No employees assigned</strong><span>Contact HR to update your reporting structure.</span></div>{% endif %}
+        <div class="quick-links"><a href="{% url 'eqrApp:attendance_list' %}"><i class="fa-regular fa-clock"></i><span>View team attendance</span><i class="fa-solid fa-chevron-right"></i></a><a href="{% url 'eqrApp:leave_list' %}"><i class="fa-regular fa-calendar-days"></i><span>View team leave requests</span><i class="fa-solid fa-chevron-right"></i></a></div>
+    </section>
+</div>
+<section class="panel-card">
+    <div class="panel-heading"><div><h3>Today's team attendance</h3><p>Check-in status of your direct reports · {{ today|date:'F d, Y' }}</p></div><a href="{% url 'eqrApp:attendance_list' %}" class="text-link">View team attendance <i class="fa-solid fa-arrow-right"></i></a></div>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Employee</th><th>Check in</th><th>Check out</th><th>Status</th></tr></thead><tbody>
+    {% for record in team_attendance %}<tr><td><strong>{{ record.employee.full_name }}</strong><small class="table-sub">{{ record.employee.employee_id }}</small></td><td>{% if record.check_in %}{{ record.check_in|date:'g:i A' }}{% else %}<span class="muted-copy">Not recorded</span>{% endif %}</td><td>{% if record.check_out %}{{ record.check_out|date:'g:i A' }}{% else %}<span class="muted-copy">—</span>{% endif %}</td><td><span class="status-pill status-{{ record.status }}">{{ record.get_status_display }}</span></td></tr>
+    {% empty %}<tr><td colspan="4"><div class="empty-state"><i class="fa-regular fa-clock"></i><strong>No team attendance records yet</strong><span>Attendance records will appear as employees check in.</span></div></td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+{% endblock %}

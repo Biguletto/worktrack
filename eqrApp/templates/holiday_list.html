@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Company Calendar | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar holiday-toolbar"><div><h2>Company calendar</h2><p>View active company holidays and approved leave information. {% if can_manage_holidays %}HR is the only role permitted to add, edit, or remove company holidays.{% else %}Approved leave details are limited to your own account or assigned team.{% endif %}</p></div>{% if can_manage_holidays %}<a class="btn btn-primary" href="{% url 'eqrApp:holiday_create' %}"><i class="fa-solid fa-plus me-2"></i>Add holiday</a>{% endif %}</div>
+<section class="panel-card holiday-calendar-panel">
+    <div class="holiday-calendar-heading"><div><span class="eyebrow">MONTHLY VIEW</span><h3>{{ current_month|date:'F Y' }}</h3></div><div class="calendar-navigation"><a class="btn btn-light" href="?month={{ previous_month }}" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></a><a class="btn btn-outline-primary" href="{% url 'eqrApp:holiday_list' %}">Today</a><a class="btn btn-light" href="?month={{ next_month }}" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></a></div></div>
+    <div class="holiday-calendar-grid"><div class="calendar-weekday">Sun</div><div class="calendar-weekday">Mon</div><div class="calendar-weekday">Tue</div><div class="calendar-weekday">Wed</div><div class="calendar-weekday">Thu</div><div class="calendar-weekday">Fri</div><div class="calendar-weekday">Sat</div>
+        {% for week in calendar_weeks %}{% for day in week %}<div class="calendar-day {% if not day.is_current_month %}outside-month{% endif %} {% if day.is_today %}today{% endif %}">
+            <div class="calendar-day-number">{{ day.date.day }}</div>
+            {% for holiday in day.holidays %}<div class="calendar-holiday {% if not holiday.is_active %}holiday-inactive{% endif %}"><span class="calendar-holiday-name" title="{{ holiday.name }}">{{ holiday.name }}</span>{% if can_manage_holidays %}<div class="calendar-holiday-actions"><a href="{% url 'eqrApp:holiday_edit' holiday.pk %}" title="Edit holiday"><i class="fa-regular fa-pen-to-square"></i></a>{% if holiday.is_active %}<form method="post" action="{% url 'eqrApp:holiday_deactivate' holiday.pk %}">{% csrf_token %}<button type="submit" title="Remove holiday" onclick="return confirm('Remove this holiday from the active calendar?')"><i class="fa-solid fa-ban"></i></button></form>{% endif %}</div>{% endif %}</div>{% endfor %}
+            {% for leave in day.leave_entries %}<div class="calendar-holiday calendar-leave" title="{{ leave.employee_name }} · {{ leave.leave_type }}"><span class="calendar-holiday-name"><i class="fa-solid fa-user-clock me-1"></i>{% if can_manage_holidays or is_team_view %}{{ leave.employee_name }}{% else %}My leave{% endif %}: {{ leave.leave_type }}</span></div>{% endfor %}
+        </div>{% endfor %}{% endfor %}
+    </div>
+    <div class="holiday-calendar-legend"><span><i class="legend-dot legend-active"></i> Active holiday</span><span><i class="legend-dot" style="background:#5b8bd7"></i> Approved leave</span><span><i class="legend-dot legend-today"></i> Today</span></div>
+</section>
+{% endblock %}

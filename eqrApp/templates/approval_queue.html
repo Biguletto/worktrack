@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}Approval Queue | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>{% if is_hr %}Leave approval queue{% elif can_review %}Team leave approvals{% else %}Pending leave workflow overview{% endif %}</h2><p>{% if is_hr %}Requests waiting for supervisor or HR action.{% elif can_review %}Review requests submitted by your direct reports.{% else %}Read-only status overview. Only the assigned supervisor and HR can approve or reject requests.{% endif %}</p></div></div>
+<section class="panel-card"><div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Employee</th><th>Leave type</th><th>Dates</th><th>Days</th><th>Current step</th><th>Submitted</th><th></th></tr></thead><tbody>
+{% for application in applications %}<tr><td><strong>{{ application.employee.full_name }}</strong><small class="table-sub">{{ application.employee.employee_id }} · {{ application.employee.department }}</small></td><td>{{ application.leave_type.name }}</td><td>{{ application.start_date|date:'M d' }} - {{ application.end_date|date:'M d, Y' }}</td><td>{{ application.requested_days }}</td><td><span class="status-pill status-{{ application.status }}">{{ application.get_status_display }}</span></td><td>{{ application.submitted_at|date:'M d, Y' }}</td><td><a class="btn btn-sm btn-outline-secondary" href="{% url 'eqrApp:leave_detail' application.pk %}">{% if can_review %}Review{% else %}View{% endif %}</a></td></tr>
+{% empty %}<tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-check-double"></i><strong>You're all caught up</strong><span>There are no leave applications waiting for your review.</span></div></td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

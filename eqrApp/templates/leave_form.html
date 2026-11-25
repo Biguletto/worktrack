@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Apply for Leave | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>New leave application</h2><p>Complete the details below and attach any required supporting documents.</p></div><a class="btn btn-light" href="{% url 'eqrApp:leave_list' %}"><i class="fa-solid fa-arrow-left me-2"></i>My requests</a></div>
+<div class="form-card"><form method="post" enctype="multipart/form-data">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+    <div class="form-grid">
+        {% for field in form %}<div class="form-field {% if field.name == 'reason' %}field-full{% endif %}"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}<span class="required-mark">*</span></label>{{ field }}{% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>{% endfor %}
+        <div class="form-field field-full"><label class="form-label" for="documents">Supporting documents</label><input class="form-control" type="file" name="documents" id="documents" accept=".pdf,.jpg,.jpeg,.png" multiple><div class="form-help">PDF, JPG, JPEG, or PNG. Maximum {{ max_document_count }} files, {{ max_document_size_mb }} MB each. Some leave types may require documentation.</div></div>
+    </div>
+    <div class="notice-box"><i class="fa-solid fa-circle-info"></i><div><strong>Approval flow</strong><span>If a supervisor is assigned to your employee profile, the request goes to your supervisor first and then HR. Otherwise, it goes directly to HR.</span></div></div>
+    <div class="form-actions"><a class="btn btn-light" href="{% url 'eqrApp:leave_list' %}">Cancel</a><button class="btn btn-primary" type="submit">Submit application</button></div>
+</form></div>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}{{ page_title }} | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>Standard leave types</h2><p>All employees use the same company-wide leave categories. The catalogue is fixed to keep request options consistent across departments.</p></div></div>
+<section class="panel-card"><div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Type</th><th>Code</th><th>Paid status</th><th>Document</th><th>Balance tracking</th></tr></thead><tbody>
+{% for item in leave_types %}<tr><td><strong>{{ item.name }}</strong><small class="table-sub">{{ item.description|default:'Company-wide standard leave category'|truncatechars:80 }}</small></td><td>{{ item.code }}</td><td>{{ item.is_paid|yesno:'Paid,Unpaid' }}</td><td>{{ item.requires_document|yesno:'Required,Optional' }}</td><td>{{ item.track_balance|yesno:'Enabled,Not tracked' }}</td></tr>
+{% empty %}<tr><td colspan="5"><div class="empty-state"><strong>No standard leave types are configured</strong><span>Run the migrations to install the shared company-wide leave catalogue.</span></div></td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

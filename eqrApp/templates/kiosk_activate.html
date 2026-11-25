@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Activate Secure Kiosk | WorkTrack{% endblock %}
+{% block content %}
+<style>
+.kiosk-activation-wrap{max-width:680px;margin:26px auto}
+.kiosk-activation-card{padding:28px;border:1px solid #e7ebf3;box-shadow:0 12px 34px rgba(26,39,68,.06)}
+.kiosk-activation-icon{width:58px;height:58px;border-radius:17px;background:#efedff;color:#6558d6;display:grid;place-items:center;font-size:24px;margin-bottom:17px}
+.kiosk-activation-card h2{font-weight:800;color:#1b2741;font-size:23px;margin:0 0 8px}
+.kiosk-activation-card p{color:#748097;font-size:12px;line-height:1.7}
+.kiosk-activation-card label{font-size:11px;font-weight:800;color:#59657a;margin-bottom:7px}
+.kiosk-activation-card input{min-height:44px}
+.kiosk-warning{border-radius:10px;background:#fff7e7;color:#89601f;padding:13px 15px;font-size:11px;line-height:1.65;margin:17px 0}
+.kiosk-activation-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px;flex-wrap:wrap}
+</style>
+<div class="kiosk-activation-wrap">
+    <section class="panel-card kiosk-activation-card">
+        <div class="kiosk-activation-icon"><i class="fa-solid fa-shield-halved"></i></div>
+        <div class="role-kicker">IT PERSONNEL · SECURE TERMINAL ACTIVATION</div>
+        <h2>Activate attendance kiosk</h2>
+        <p>This opens a dedicated scanner page for the shared attendance laptop. Before activation, WorkTrack asks you to confirm the password of your current Administrator account.</p>
+        <div class="kiosk-warning"><strong><i class="fa-solid fa-lock me-1"></i> Kiosk session lock</strong><br>After activation, dashboard pages, employee pages, logout, and other WorkTrack routes will redirect back to the scanner. To leave kiosk mode, an Administrator must verify their password again from the kiosk screen.</div>
+        {% if kiosk_locked_seconds %}<div class="alert alert-warning small">Kiosk activation is temporarily locked. Try again in {{ kiosk_locked_seconds }} seconds.</div>{% endif %}
+        <form method="post" autocomplete="off">
+            {% csrf_token %}
+            <label for="kiosk-activation-username">Authorized Administrator username</label>
+            <input class="form-control mb-3" type="text" id="kiosk-activation-username" name="username" value="{{ request.user.get_username }}" required autocomplete="username" {% if kiosk_locked_seconds %}disabled{% endif %}>
+            <label for="kiosk-activation-password">Administrator password</label>
+            <input class="form-control" type="password" id="kiosk-activation-password" name="password" required autocomplete="current-password" {% if kiosk_locked_seconds %}disabled{% endif %}>
+            <div class="kiosk-activation-actions">
+                <a href="{% url 'eqrApp:admin_dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary" {% if kiosk_locked_seconds %}disabled{% endif %}><i class="fa-solid fa-qrcode me-2"></i>Verify and activate kiosk</button>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}

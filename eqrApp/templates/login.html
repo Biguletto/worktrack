@@ -1,0 +1,45 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in | WorkTrack</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+    <link href="{% static 'css/hrms.css' %}" rel="stylesheet">
+</head>
+<body class="login-page">
+    <div class="login-panel">
+        <div class="login-brand">
+            <span class="brand-mark"><i class="fa-solid fa-calendar-check"></i></span>
+            <div><strong>WorkTrack</strong><small>Employee Leave & Attendance</small></div>
+        </div>
+        <div class="login-intro">
+            <span class="eyebrow">WELCOME BACK</span>
+            <h1>Sign in to your workspace</h1>
+            <p>Manage attendance, submit leave requests, and follow approval updates.</p>
+        </div>
+        {% if messages %}
+            {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}
+        {% endif %}
+        <form method="post" action="{% url 'eqrApp:login' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <div class="mb-3">
+                <label class="form-label" for="username">Username</label>
+                <div class="input-icon"><i class="fa-regular fa-user"></i><input class="form-control" id="username" type="text" name="username" placeholder="Enter your username" required autofocus></div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label" for="password">Password</label>
+                <div class="input-icon"><i class="fa-solid fa-lock"></i><input class="form-control" id="password" type="password" name="password" placeholder="Enter your password" required></div>
+            </div>
+            <div class="text-end mb-3"><a href="{% url 'eqrApp:password_reset' %}" class="small text-decoration-none">Forgot password?</a></div>
+            <button class="btn btn-primary w-100 login-submit" type="submit">Sign in <i class="fa-solid fa-arrow-right ms-2"></i></button>
+        </form>
+        <p class="login-help">Forgot your password? Use the reset link above or contact HR if you cannot access your registered email.</p>
+    </div>
+    <div class="login-decoration"><div class="decoration-orb orb-one"></div><div class="decoration-orb orb-two"></div><div class="decoration-content"><i class="fa-solid fa-people-group"></i><h2>People operations,<br>in one place.</h2><p>A simple workspace for your team’s attendance and leave processes.</p></div></div>
+<script src="{% static 'js/password-toggle.js' %}"></script>
+</body>
+</html>

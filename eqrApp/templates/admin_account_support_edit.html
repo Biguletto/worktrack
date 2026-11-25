@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Employee Account Support | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>Employee Account Support</h2><p>IT support can change only the account holder's name, username, and password. Employment profile, department, job position, attendance, and leave data are not editable here.</p></div><a class="btn btn-light" href="{% url 'eqrApp:employee_list' %}"><i class="fa-solid fa-arrow-left me-2"></i>Back to accounts</a></div>
+<section class="panel-card account-support-card"><div class="person-cell mb-3"><span class="person-avatar">{{ profile.user.first_name|first|upper }}</span><span><strong>{{ profile.full_name }}</strong><small>{{ profile.employee_id }} · {{ profile.get_role_display }}</small></span></div>
+<form method="post">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid">{% for field in form %}<div class="form-field"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="form-help">{{ field.help_text }}</div>{% endif %}{% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><a class="btn btn-light" href="{% url 'eqrApp:employee_list' %}">Cancel</a><button class="btn btn-primary" type="submit">Save permitted account changes</button></div></form></section>
+{% endblock %}

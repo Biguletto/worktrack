@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Edit Attendance | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>{% if is_create %}Add attendance record{% else %}Edit attendance record{% endif %}</h2><p>{% if record %}{{ record.employee.full_name }} · {{ record.employee.employee_id }}{% else %}Create an attendance entry or record an approved HR correction.{% endif %}</p></div><a class="btn btn-light" href="{% url 'eqrApp:attendance_list' %}"><i class="fa-solid fa-arrow-left me-2"></i>Back to attendance</a></div>
+<div class="form-card"><form method="post">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid">{% for field in form %}<div class="form-field {% if field.name == 'remarks' %}field-full{% endif %}"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><a class="btn btn-light" href="{% url 'eqrApp:attendance_list' %}">Cancel</a><button class="btn btn-primary" type="submit">{% if is_create %}Create record{% else %}Save attendance{% endif %}</button></div></form></div>
+{% endblock %}

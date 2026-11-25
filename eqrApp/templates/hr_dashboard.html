@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}HR Dashboard | WorkTrack{% endblock %}
+{% block content %}
+<div class="welcome-row">
+    <div><div class="role-kicker"><i class="fa-solid fa-briefcase me-1"></i> HUMAN RESOURCES WORKSPACE</div><h2>Good day, {{ request.user.first_name|default:request.user.username }}.</h2><p>Manage employee and supervisor accounts, company leave requests, approvals, and the shared calendar.</p></div>
+    <a class="btn btn-primary" href="{% url 'eqrApp:employee_create' %}"><i class="fa-solid fa-user-plus me-2"></i>Add employee</a>
+</div>
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon icon-purple"><i class="fa-solid fa-users"></i></div><div class="stat-label">Active employees</div><div class="stat-value">{{ employees_count }}</div><div class="stat-foot">Employee and supervisor accounts</div></div>
+    <div class="stat-card"><div class="stat-icon icon-green"><i class="fa-regular fa-calendar-check"></i></div><div class="stat-label">On approved leave</div><div class="stat-value">{{ on_leave_count }}</div><div class="stat-foot">Approved leave today</div></div>
+    <div class="stat-card"><div class="stat-icon icon-orange"><i class="fa-solid fa-hourglass-half"></i></div><div class="stat-label">Pending supervisor acknowledgment</div><div class="stat-value">{{ pending_supervisor_count }}</div><div class="stat-foot">Awaiting team supervisor review</div></div>
+    <div class="stat-card"><div class="stat-icon icon-blue"><i class="fa-solid fa-list-check"></i></div><div class="stat-label">Pending HR decisions</div><div class="stat-value">{{ pending_hr_count }}</div><div class="stat-foot">Ready for final HR decision</div></div>
+</div>
+<div class="hr-action-strip">
+    <div><span class="eyebrow">HR ACTION CENTER</span><strong>{{ pending_hr_count }} request{{ pending_hr_count|pluralize }} awaiting final HR review</strong><small>{{ pending_count }} total leave request{{ pending_count|pluralize }} remain in the approval workflow.</small></div>
+    <a href="{% url 'eqrApp:leave_list' %}" class="btn btn-light"><i class="fa-solid fa-list-check me-2"></i>Open leave requests</a>
+</div>
+<div class="dashboard-grid">
+    <section class="panel-card">
+        <div class="panel-heading"><div><h3>Recent leave applications</h3><p>Latest employee submissions and workflow updates</p></div><a href="{% url 'eqrApp:leave_list' %}" class="text-link">View all <i class="fa-solid fa-arrow-right"></i></a></div>
+        {% if recent_applications %}
+            <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Employee</th><th>Leave type</th><th>Dates</th><th>Status</th><th></th></tr></thead><tbody>
+            {% for application in recent_applications %}
+                <tr><td><strong>{{ application.employee.full_name }}</strong><small class="table-sub">{{ application.employee.employee_id }}</small></td><td>{{ application.leave_type.name }}</td><td>{{ application.start_date|date:'M d' }} - {{ application.end_date|date:'M d, Y' }}</td><td><span class="status-pill status-{{ application.status }}">{{ application.get_status_display }}</span></td><td><a class="icon-link" href="{% url 'eqrApp:leave_detail' application.pk %}" aria-label="View request"><i class="fa-solid fa-chevron-right"></i></a></td></tr>
+            {% endfor %}
+            </tbody></table></div>
+        {% else %}<div class="empty-state"><i class="fa-regular fa-folder-open"></i><strong>No leave applications yet</strong><span>Employee requests will appear here.</span></div>{% endif %}
+    </section>
+    <section class="panel-card quick-panel">
+        <div class="panel-heading"><div><h3>HR workspace</h3><p>Daily employee and leave operations</p></div></div>
+        <div class="quick-links"><a href="{% url 'eqrApp:employee_list' %}"><i class="fa-solid fa-users"></i><span>Manage employee profiles</span><i class="fa-solid fa-chevron-right"></i></a><a href="{% url 'eqrApp:leave_list' %}"><i class="fa-regular fa-calendar-days"></i><span>Manage leave requests and balances</span><i class="fa-solid fa-chevron-right"></i></a><a href="{% url 'eqrApp:holiday_list' %}"><i class="fa-solid fa-calendar-days"></i><span>Manage company calendar</span><i class="fa-solid fa-chevron-right"></i></a><a href="{% url 'eqrApp:employee_create' %}"><i class="fa-solid fa-user-plus"></i><span>Create employee or supervisor account</span><i class="fa-solid fa-chevron-right"></i></a></div>
+        <div class="admin-note"><i class="fa-solid fa-circle-info"></i><span>HR is a role account and does not receive an employee QR code or personal attendance record. Company-wide attendance management is not part of this HR workspace.</span></div>
+    </section>
+</div>
+{% endblock %}

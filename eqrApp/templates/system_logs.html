@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}System Logs | WorkTrack{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>System logs and errors</h2><p>Warnings and errors requiring IT review. Employee names, account identifiers, actors, IP addresses, and request paths are intentionally hidden.</p></div></div>
+<section class="panel-card">
+    <form method="get" class="filter-bar">
+        <input class="form-control" type="date" name="date_from" value="{{ date_from }}" aria-label="From date">
+        <input class="form-control" type="date" name="date_to" value="{{ date_to }}" aria-label="To date">
+        <select class="form-select" name="severity"><option value="">All warnings and errors</option><option value="warning" {% if severity == 'warning' %}selected{% endif %}>Warning</option><option value="error" {% if severity == 'error' %}selected{% endif %}>Error</option></select>
+        <button class="btn btn-outline-primary" type="submit">Apply filters</button><a class="btn btn-light" href="{% url 'eqrApp:system_logs' %}">Reset</a>
+    </form>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Date / Time</th><th>Severity</th><th>System event</th></tr></thead><tbody>
+    {% for event in events %}<tr><td>{{ event.created_at|date:'M d, Y · g:i A' }}</td><td><span class="status-pill status-{{ event.safe_severity_class }}">{{ event.safe_severity }}</span></td><td>{{ event.safe_summary }}</td></tr>{% empty %}<tr><td colspan="3"><div class="empty-state"><i class="fa-solid fa-clipboard-check"></i><strong>No warnings or errors found</strong><span>Choose another date range or severity.</span></div></td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="form-help mt-3">Only warnings and errors are shown. Critical system events are grouped under Error. Successful user actions are excluded from this view.</p>
+</section>
+{% endblock %}
