@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.core.management import call_command, CommandError
 from django.core import signing
-from django.test import TestCase, RequestFactory, override_settings
+from django.test import Client, TestCase, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -124,6 +124,28 @@ class WorkTrackRoleDashboardTests(TestCase):
                 self.assertRedirects(response, reverse(route_name), fetch_redirect_response=False)
                 dashboard = self.client.get(reverse(route_name))
                 self.assertEqual(dashboard.status_code, 200)
+
+    def test_login_lockout_is_limited_to_the_targeted_username(self):
+        login_url = reverse('eqrApp:login')
+        password = 'TestingPass123!'
+        for _ in range(5):
+            self.client.post(login_url, {'username': self.employee_user.username, 'password': 'wrong'})
+
+        for user in (self.hr_user, self.supervisor_user, self.team_user, self.admin_user):
+            with self.subTest(username=user.username):
+                client = Client()
+                response = client.post(login_url, {'username': user.username, 'password': password})
+                self.assertRedirects(response, reverse('eqrApp:home'), fetch_redirect_response=False)
+                self.assertEqual(client.session['_auth_user_id'], str(user.pk))
+
+        credentials = {'username': self.employee_user.username, 'password': password}
+        for address in ('127.0.0.1', '192.0.2.10'):
+            with self.subTest(address=address):
+                self.assertEqual(self.client.post(login_url, credentials, REMOTE_ADDR=address).status_code, 429)
+
+        call_command('axes_reset_username', self.employee_user.username, verbosity=0)
+        response = self.client.post(login_url, credentials)
+        self.assertRedirects(response, reverse('eqrApp:home'), fetch_redirect_response=False)
 
     def test_supervisor_only_sees_direct_reports_in_team_attendance(self):
         self.client.force_login(self.supervisor_user)

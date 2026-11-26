@@ -119,7 +119,10 @@ AUTHENTICATION_BACKENDS = [
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1
 AXES_RESET_ON_SUCCESS = True
-AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+# Employees share office and kiosk IPs. Keep the lockout attached to the account.
+AXES_LOCKOUT_PARAMETERS = ['username']
+# Axes recommends an IP lockout (W006), which would block unrelated users here.
+SILENCED_SYSTEM_CHECKS = ['axes.W006']
 # Render an application-branded lockout page instead of Axes' plain-text default.
 AXES_LOCKOUT_TEMPLATE = 'account_locked.html'
 AXES_HTTP_RESPONSE_CODE = 429
