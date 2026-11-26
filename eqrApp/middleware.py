@@ -107,6 +107,7 @@ class KioskSessionLockMiddleware:
         "/accounts/attendance/kiosk/settings/lock/",
         "/accounts/attendance/kiosk/settings/manual/",
         "/accounts/attendance/kiosk/settings/edit/",
+        "/accounts/attendance/kiosk/settings/history/",
         "/favicon.ico",
     }
     SESSION_ACTIVE_KEY = "worktrack_kiosk_active"

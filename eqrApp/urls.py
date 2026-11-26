@@ -40,6 +40,7 @@ urlpatterns = [
     path('employees/<int:pk>/edit/', views.employee_edit, name='employee_edit'),
     path('employees/<int:pk>/reset-account/', views.employee_account_reset, name='employee_account_reset'),
     path('employees/<int:pk>/account-support/', views.employee_account_support_edit, name='employee_account_support_edit'),
+    path('employees/<int:pk>/unlock/', views.employee_account_unlock, name='employee_account_unlock'),
 
     # Daily attendance
     path('attendance/', views.attendance_list, name='attendance_list'),
@@ -54,6 +55,7 @@ urlpatterns = [
     path('attendance/kiosk/settings/lock/', views.attendance_kiosk_settings_lock, name='attendance_kiosk_settings_lock'),
     path('attendance/kiosk/settings/manual/', views.attendance_kiosk_manual, name='attendance_kiosk_manual'),
     path('attendance/kiosk/settings/edit/', views.attendance_kiosk_edit, name='attendance_kiosk_edit'),
+    path('attendance/kiosk/settings/history/', views.attendance_kiosk_history, name='attendance_kiosk_history'),
     path('attendance/kiosk/scan/', views.attendance_kiosk_scan, name='attendance_kiosk_scan'),
     path('attendance/<int:pk>/edit/', views.attendance_edit, name='attendance_edit'),
     path('attendance/<int:pk>/delete/', views.attendance_delete, name='attendance_delete'),

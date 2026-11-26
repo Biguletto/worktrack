@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -1598,3 +1598,141 @@ class ElyssaBugFixTests(TestCase):
         password = self.message_password(response)
         self.assertNotEqual(password, 'employee123')
         self.assertTrue(User.objects.get(username='cruzana').check_password(password))
+
+
+class CaseyImprovementTests(TestCase):
+    """Tests for the improvement release: correction preview data, correction history and account unlock."""
+
+    def setUp(self):
+        self.supervisor_user = User.objects.create_user('mkt_supervisor', password='TestingPass123!')
+        EmployeeProfile.objects.create(
+            user=self.supervisor_user, employee_id='MKT-SUP-01', role='supervisor',
+            department='Marketing', position='Marketing Manager', hire_date=date(2020, 1, 1),
+        )
+        self.employee_user = User.objects.create_user('mkt_employee', password='TestingPass123!', first_name='Lea', last_name='Santos')
+        self.employee = EmployeeProfile.objects.create(
+            user=self.employee_user, employee_id='MKT-EMP-01', role='employee', department='Marketing',
+            position='Sales Representative', manager=self.supervisor_user, hire_date=date(2020, 1, 1),
+        )
+        self.hr_user = User.objects.create_user('hr_casey', password='TestingPass123!')
+        EmployeeProfile.objects.create(user=self.hr_user, employee_id='HR-02', role='hr', department='HR', position='HR Officer')
+        self.admin_user = User.objects.create_superuser('kiosk_admin', 'kiosk@example.com', 'TestingPass123!')
+        self.day = timezone.localdate() - timedelta(days=3)
+
+    def open_kiosk_settings(self):
+        self.client.force_login(self.admin_user)
+        self.client.post(reverse('eqrApp:attendance_kiosk'), {'username': 'kiosk_admin', 'password': 'TestingPass123!'})
+        unlocked = self.client.post(reverse('eqrApp:attendance_kiosk_settings_unlock'), {'password': 'TestingPass123!'})
+        self.assertEqual(unlocked.status_code, 200)
+
+    def correct_check_in(self, record, new_time, reason):
+        url = reverse('eqrApp:attendance_kiosk_edit')
+        key = {'employee_id': 'MKT-EMP-01', 'attendance_date': record.attendance_date.isoformat()}
+        found = self.client.post(url, {**key, 'action': 'lookup'}).json()
+        response = self.client.post(url, {
+            **key, 'action': 'update', 'version': found['version'], 'status': 'present',
+            'check_in': new_time, 'check_out': found['check_out_value'], 'reason': reason,
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        return found
+
+    def history(self, **extra):
+        data = {'employee_id': 'MKT-EMP-01', 'date_from': (self.day - timedelta(days=5)).isoformat(),
+                'date_to': timezone.localdate().isoformat(), **extra}
+        return self.client.post(reverse('eqrApp:attendance_kiosk_history'), data)
+
+    def make_record(self, day=None):
+        day = day or self.day
+        check_in = timezone.make_aware(datetime.combine(day, time(9, 12)))
+        check_out = timezone.make_aware(datetime.combine(day, time(17, 3)))
+        return AttendanceRecord.objects.create(employee=self.employee, attendance_date=day, check_in=check_in,
+                                               check_out=check_out, status='late', source='self_service')
+
+    def test_kiosk_page_has_preview_and_history_panels(self):
+        self.open_kiosk_settings()
+        page = self.client.get(reverse('eqrApp:attendance_kiosk_run'))
+        self.assertContains(page, 'correction-preview')
+        self.assertContains(page, 'kiosk-history-form')
+
+    def test_lookup_returns_late_cutoff_for_preview(self):
+        self.make_record()
+        self.open_kiosk_settings()
+        found = self.client.post(reverse('eqrApp:attendance_kiosk_edit'), {
+            'employee_id': 'MKT-EMP-01', 'attendance_date': self.day.isoformat(), 'action': 'lookup'}).json()
+        self.assertEqual(found['late_after'], '09:00')
+        self.assertEqual(found['check_in_value'], '09:12:00')
+
+    def test_history_requires_unlocked_kiosk_settings(self):
+        self.client.force_login(self.admin_user)
+        self.assertEqual(self.history().status_code, 403)
+        self.client.force_login(self.hr_user)
+        self.client.raise_request_exception = False
+        self.assertEqual(self.history().status_code, 403)
+
+    def test_history_shows_correction_with_reason_and_before_after(self):
+        record = self.make_record()
+        self.open_kiosk_settings()
+        self.correct_check_in(record, '08:52:00', 'Scanner was offline at arrival')
+        data = self.history().json()
+        self.assertTrue(data['ok'])
+        correction = next(entry for entry in data['entries'] if entry['kind'] == 'Correction')
+        self.assertEqual(correction['reason'], 'Scanner was offline at arrival')
+        self.assertEqual(correction['attendance_date'], self.day.isoformat())
+        changes = {change['field']: change for change in correction['changes']}
+        self.assertEqual(changes['Check-in']['before'], '09:12:00 AM')
+        self.assertEqual(changes['Check-in']['after'], '08:52:00 AM')
+        self.assertEqual(changes['Status']['before'], 'Late')
+        self.assertEqual(changes['Status']['after'], 'Present')
+        self.assertNotIn('Check-out', changes)
+
+    def test_history_includes_deleted_records(self):
+        record = self.make_record()
+        self.open_kiosk_settings()
+        url = reverse('eqrApp:attendance_kiosk_edit')
+        key = {'employee_id': 'MKT-EMP-01', 'attendance_date': self.day.isoformat()}
+        found = self.client.post(url, {**key, 'action': 'lookup'}).json()
+        self.client.post(url, {**key, 'action': 'delete', 'version': found['version'], 'reason': 'Duplicate test record'})
+        self.assertFalse(AttendanceRecord.objects.filter(pk=record.pk).exists())
+        deleted = next(entry for entry in self.history().json()['entries'] if entry['kind'] == 'Record deleted')
+        self.assertEqual(deleted['reason'], 'Duplicate test record')
+        self.assertEqual(deleted['attendance_date'], self.day.isoformat())
+
+    def test_history_respects_date_range_and_validates_input(self):
+        old_day = self.day - timedelta(days=40)
+        old_record = self.make_record(old_day)
+        self.open_kiosk_settings()
+        self.correct_check_in(old_record, '08:45:00', 'Old correction')
+        self.assertEqual(self.history().json()['entries'], [])
+        self.assertEqual(self.history(date_from='2026-02-10', date_to='2026-02-01').status_code, 400)
+        self.assertEqual(self.history(date_from='2025-01-01', date_to='2025-12-31').status_code, 400)
+        self.assertEqual(self.history(employee_id='NOPE-1').status_code, 404)
+
+    def lock_out(self):
+        anonymous = Client()
+        for _ in range(5):
+            anonymous.post(reverse('eqrApp:login'), {'username': 'mkt_employee', 'password': 'wrong-password'})
+        self.assertEqual(anonymous.post(reverse('eqrApp:login'), {'username': 'mkt_employee', 'password': 'TestingPass123!'}).status_code, 429)
+
+    def test_account_support_shows_lock_and_unlock_keeps_password(self):
+        self.lock_out()
+        self.client.force_login(self.admin_user)
+        page = self.client.get(reverse('eqrApp:employee_account_support_edit', args=[self.employee.pk]))
+        self.assertContains(page, 'Locked.')
+        response = self.client.post(reverse('eqrApp:employee_account_unlock', args=[self.employee.pk]), follow=True)
+        self.assertContains(response, 'Sign-in lock cleared')
+        login = Client().post(reverse('eqrApp:login'), {'username': 'mkt_employee', 'password': 'TestingPass123!'})
+        self.assertEqual(login.status_code, 302)
+        page = self.client.get(reverse('eqrApp:employee_account_support_edit', args=[self.employee.pk]))
+        self.assertContains(page, 'Not locked')
+
+    def test_only_administrators_can_unlock(self):
+        self.lock_out()
+        other_user = User.objects.create_user('mkt_other', password='TestingPass123!')
+        EmployeeProfile.objects.create(user=other_user, employee_id='MKT-EMP-02', role='employee', department='Marketing',
+                                       position='Sales Representative', manager=self.supervisor_user)
+        # Signing in as the locked user would itself clear the lock (AXES_RESET_ON_SUCCESS), so use other accounts.
+        for user in (self.hr_user, other_user, self.supervisor_user):
+            self.client.force_login(user)
+            self.client.raise_request_exception = False
+            self.assertEqual(self.client.post(reverse('eqrApp:employee_account_unlock', args=[self.employee.pk])).status_code, 403)
+        self.assertEqual(Client().post(reverse('eqrApp:login'), {'username': 'mkt_employee', 'password': 'TestingPass123!'}).status_code, 429)

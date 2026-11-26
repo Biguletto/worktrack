@@ -15,6 +15,8 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import login_required
+from axes.helpers import get_cool_off
+from axes.models import AccessAttempt
 from axes.utils import reset as axes_reset
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -122,8 +124,26 @@ def generate_temporary_password(length=10):
 
 def clear_sign_in_lockout(*usernames):
     """Remove failed sign-in attempts so a reset account can sign in immediately."""
+    removed = 0
     for username in {name for name in usernames if name}:
-        axes_reset(username=username)
+        removed += axes_reset(username=username) or 0
+    return removed
+
+
+def sign_in_lock_status(username):
+    """Summarize recent failed sign-ins for one username (django-axes lockout is per username)."""
+    attempts = AccessAttempt.objects.filter(username=username)
+    cool_off = get_cool_off()
+    if cool_off:
+        attempts = attempts.filter(attempt_time__gte=timezone.now() - cool_off)
+    attempts = list(attempts)
+    failures = max((attempt.failures_since_start for attempt in attempts), default=0)
+    limit = getattr(settings, 'AXES_FAILURE_LIMIT', 5)
+    locked = failures >= limit
+    unlock_at = None
+    if locked and cool_off:
+        unlock_at = timezone.localtime(max(attempt.attempt_time for attempt in attempts) + cool_off)
+    return {'failures': failures, 'limit': limit, 'locked': locked, 'unlock_at': unlock_at}
 
 
 def generated_employee_username(first_name, last_name, employee_id=''):
@@ -766,7 +786,29 @@ def employee_account_support_edit(request, pk):
         form = AdminAccountSupportForm(user=profile.user)
     return render(request, 'admin_account_support_edit.html', {
         'page_title': 'Employee Account Support', 'form': form, 'profile': profile,
+        'lock_status': sign_in_lock_status(profile.user.username),
     })
+
+
+@admin_required
+@require_POST
+def employee_account_unlock(request, pk):
+    """Let an Administrator clear a sign-in lockout without changing the password."""
+    profile = get_object_or_404(
+        EmployeeProfile.objects.select_related('user'),
+        pk=pk, role__in=['employee', 'supervisor', 'hr'],
+    )
+    removed = clear_sign_in_lockout(profile.user.username)
+    log_system_event(
+        request, 'admin_account_unlocked',
+        'Administrator cleared failed sign-in attempts for an account.',
+        severity='info', details={'cleared_attempt_records': removed},
+    )
+    if removed:
+        messages.success(request, f'Sign-in lock cleared for {profile.user.username}. They can sign in again now with their current password.')
+    else:
+        messages.info(request, f'{profile.user.username} had no recent failed sign-in attempts. Nothing needed to be unlocked.')
+    return redirect('eqrApp:employee_account_support_edit', pk=profile.pk)
 
 
 @admin_required
@@ -1126,6 +1168,7 @@ def attendance_kiosk_run(request):
         'settings_unlock_url': reverse('eqrApp:attendance_kiosk_settings_unlock'),
         'settings_lock_url': reverse('eqrApp:attendance_kiosk_settings_lock'),
         'correction_statuses': KioskCorrectionForm.base_fields['status'].choices,
+        'history_start': today - timedelta(days=30),
         'admin_display_name': request.user.get_full_name() or request.user.get_username(),
         'recent_records': recent_records,
     })
@@ -1378,6 +1421,7 @@ def attendance_kiosk_edit(request):
             for field in ('check_in', 'check_out'):
                 stamp = getattr(record, field)
                 data[field + '_value'] = timezone.localtime(stamp).strftime('%H:%M:%S') if stamp else ''
+            data['late_after'] = getattr(settings, 'ATTENDANCE_LATE_AFTER', '09:00')
             return JsonResponse(data)
         if request.POST.get('version') != version:
             return JsonResponse({'ok': False, 'message': 'Attendance has changed. Find the record again before saving.'}, status=409)
@@ -1408,6 +1452,99 @@ def attendance_kiosk_edit(request):
         AttendanceAudit.objects.create(employee=record.employee, attendance=record, actor=request.user,
             action='updated', old_values=old_values, new_values={**attendance_snapshot(record), 'correction_reason': reason})
         return JsonResponse(kiosk_attendance_payload(record, action, 'Attendance correction saved.'))
+
+
+AUDIT_SOURCE_LABELS = {
+    'self_service': 'QR scan', 'admin': 'Administrator', 'leave_sync': 'Approved leave',
+    'scheduled': 'Absence process', 'hr': 'HR',
+}
+KIOSK_HISTORY_MAX_DAYS = 93
+
+
+def describe_attendance_audit(audit):
+    """Turn one AttendanceAudit row into a readable before/after summary for the kiosk history."""
+    old_values = audit.old_values or {}
+    new_values = audit.new_values or {}
+    reason = new_values.get('correction_reason', '')
+    status_labels = dict(AttendanceRecord.STATUS_CHOICES)
+
+    def readable(field, value):
+        if not value:
+            return '—'
+        if field == 'status':
+            return status_labels.get(value, value)
+        try:
+            return timezone.localtime(datetime.fromisoformat(value)).strftime('%I:%M:%S %p')
+        except (TypeError, ValueError):
+            return str(value)
+
+    if audit.action == 'deleted':
+        kind = 'Record deleted'
+    elif reason:
+        kind = 'Correction'
+    elif audit.action == 'created':
+        kind = 'Record created'
+    else:
+        kind = 'Attendance updated'
+    changes = []
+    for field, label in (('check_in', 'Check-in'), ('check_out', 'Check-out'), ('status', 'Status')):
+        before = old_values.get(field)
+        after = None if audit.action == 'deleted' else new_values.get(field)
+        if audit.action != 'deleted' and field not in new_values:
+            continue
+        if before != after:
+            changes.append({'field': label, 'before': readable(field, before), 'after': readable(field, after)})
+    actor = audit.actor
+    return {
+        'when': timezone.localtime(audit.created_at).strftime('%b %d, %Y %I:%M %p'),
+        'attendance_date': new_values.get('attendance_date') or old_values.get('attendance_date') or '',
+        'kind': kind,
+        'source': AUDIT_SOURCE_LABELS.get(new_values.get('source') or old_values.get('source'), ''),
+        'actor': (actor.get_full_name() or actor.get_username()) if actor else 'System',
+        'reason': reason,
+        'changes': changes,
+    }
+
+
+@admin_required
+@require_POST
+def attendance_kiosk_history(request):
+    """Read-only history of every attendance change for one employee, inside unlocked kiosk settings."""
+    if not kiosk_settings_is_unlocked(request) or not request_kiosk_ip_allowed(request):
+        return JsonResponse({'ok': False, 'message': 'Unlock Administrator kiosk settings first.'}, status=403)
+    try:
+        start = date.fromisoformat(request.POST.get('date_from', ''))
+        end = date.fromisoformat(request.POST.get('date_to', ''))
+    except ValueError:
+        return JsonResponse({'ok': False, 'message': 'Choose a valid start and end date.'}, status=400)
+    if end < start:
+        return JsonResponse({'ok': False, 'message': 'The end date cannot be earlier than the start date.'}, status=400)
+    if (end - start).days >= KIOSK_HISTORY_MAX_DAYS:
+        return JsonResponse({'ok': False, 'message': f'Choose a range of {KIOSK_HISTORY_MAX_DAYS} days or less.'}, status=400)
+    employee = EmployeeProfile.objects.select_related('user').filter(
+        employee_id=request.POST.get('employee_id', '').strip(), role__in=('employee', 'supervisor'),
+    ).first()
+    if employee is None:
+        return JsonResponse({'ok': False, 'message': 'No employee or supervisor matches that ID.'}, status=404)
+
+    first, last = start.isoformat(), end.isoformat()
+    entries = []
+    audits = AttendanceAudit.objects.filter(employee=employee).select_related('actor').order_by('-created_at', '-pk')
+    for audit in audits[:500]:
+        entry = describe_attendance_audit(audit)
+        if first <= entry['attendance_date'] <= last:
+            entries.append(entry)
+        if len(entries) >= 100:
+            break
+    count = len(entries)
+    return JsonResponse({
+        'ok': True,
+        'employee_name': employee.full_name,
+        'employee_id': employee.employee_id,
+        'entries': entries,
+        'message': f'{count} attendance change{"" if count == 1 else "s"} found for {employee.full_name}.' if count
+        else f'No attendance changes found for {employee.full_name} in that date range.',
+    })
 
 
 @admin_required

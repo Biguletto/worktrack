@@ -4,4 +4,16 @@
 <div class="page-toolbar"><div><h2>Employee Account Support</h2><p>IT support can change only the account holder's name, username, and password. Employment profile, department, job position, attendance, and leave data are not editable here.</p></div><a class="btn btn-light" href="{% url 'eqrApp:employee_list' %}"><i class="fa-solid fa-arrow-left me-2"></i>Back to accounts</a></div>
 <section class="panel-card account-support-card"><div class="person-cell mb-3"><span class="person-avatar">{{ profile.user.first_name|first|upper }}</span><span><strong>{{ profile.full_name }}</strong><small>{{ profile.employee_id }} · {{ profile.get_role_display }}</small></span></div>
 <form method="post">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid">{% for field in form %}<div class="form-field"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="form-help">{{ field.help_text }}</div>{% endif %}{% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><a class="btn btn-light" href="{% url 'eqrApp:employee_list' %}">Cancel</a><button class="btn btn-primary" type="submit">Save permitted account changes</button></div></form></section>
+<section class="panel-card account-support-card">
+<h3 class="side-heading">Sign-in lock</h3>
+{% if lock_status.locked %}
+<div class="alert alert-warning small mb-3"><strong>Locked.</strong> {{ lock_status.failures }} failed sign-in attempts{% if lock_status.unlock_at %}; the lock ends automatically at {{ lock_status.unlock_at|date:"g:i A" }}{% endif %}.</div>
+{% elif lock_status.failures %}
+<p class="muted-copy">Not locked. {{ lock_status.failures }} recent failed attempt{{ lock_status.failures|pluralize }} (the account locks after {{ lock_status.limit }}).</p>
+{% else %}
+<p class="muted-copy">Not locked. No recent failed sign-in attempts.</p>
+{% endif %}
+<form method="post" action="{% url 'eqrApp:employee_account_unlock' profile.pk %}">{% csrf_token %}<button class="btn btn-outline-primary" type="submit"{% if not lock_status.failures %} disabled{% endif %}><i class="fa-solid fa-lock-open me-1"></i>Unlock account</button></form>
+<p class="form-help mt-2">Unlocking clears the failed attempts only. The password stays the same. Setting a new password above also unlocks the account.</p>
+</section>
 {% endblock %}

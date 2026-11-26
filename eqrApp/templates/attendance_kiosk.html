@@ -276,6 +276,16 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
 .kiosk-correction-card .kiosk-form-row { grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); }
 .kiosk-correction-card #kiosk-edit-form { border-top:1px solid #e9edf4; margin-top:14px; padding-top:14px; }
 .kiosk-correction-card output { display:block; margin-top:8px; }
+.correction-preview { margin-top:12px; padding:10px 12px; border:1px dashed #c9cfdb; border-radius:8px; background:#fafbfe; }
+.correction-preview strong { display:block; font-size:12px; margin-bottom:4px; }
+.correction-preview ul { margin:0; padding-left:18px; font-size:12px; }
+.correction-preview li.is-changed { font-weight:700; }
+.correction-suggestion { margin-top:8px; font-size:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.kiosk-history-card table { width:100%; font-size:12px; margin-top:12px; border-collapse:collapse; }
+.kiosk-history-card th, .kiosk-history-card td { border-top:1px solid #e9edf4; padding:6px 8px; vertical-align:top; text-align:left; }
+.kiosk-history-card th { font-size:11px; color:#6b7385; text-transform:uppercase; letter-spacing:.4px; }
+.kiosk-history-card td ul { margin:0; padding-left:16px; }
+.kiosk-history-scroll { max-height:320px; overflow:auto; }
 .kiosk-exit-card { display:flex; flex-direction:column; align-items:flex-start; }
 .kiosk-settings-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid #edf0f5; color:#8994a7; font-size:10px; }
 .kiosk-settings-footer .btn { font-size:10px; }
@@ -413,6 +423,14 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
                         <div><label for="correction-status">Attendance status</label><select id="correction-status" name="status" class="form-select">{% for value, label in correction_statuses %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
                     </div>
                     <button type="button" id="clear-checkout" class="btn btn-outline-secondary">Clear accidental check-out</button>
+                    <div id="correction-preview" class="correction-preview" aria-live="polite">
+                        <strong>What will change</strong>
+                        <ul id="correction-preview-list"></ul>
+                        <div id="correction-suggestion" class="correction-suggestion" hidden>
+                            <span id="correction-suggestion-text"></span>
+                            <button type="button" id="correction-suggestion-apply" class="btn btn-sm btn-outline-primary"></button>
+                        </div>
+                    </div>
                     {% get_current_timezone as attendance_timezone %}
                     <p class="kiosk-settings-note">Save with check-out blank to reopen the shift. Times are shown in {{ attendance_timezone }}.</p>
                     <label for="correction-reason">Reason for correction or deletion</label>
@@ -423,6 +441,26 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
                     </div>
                 </form>
                 <output id="correction-result" role="status" aria-live="polite"></output>
+            </section>
+            <section class="kiosk-settings-card kiosk-correction-card kiosk-history-card">
+                <h3>Correction history</h3>
+                <p class="kiosk-settings-note">Every scan, manual entry, correction and deletion for one employee, with the Administrator and reason. Read-only.</p>
+                <form id="kiosk-history-form" class="kiosk-admin-form" method="post" action="{% url 'eqrApp:attendance_kiosk_history' %}">
+                    {% csrf_token %}
+                    <div class="kiosk-form-row">
+                        <div><label for="history-employee">Employee ID</label><input id="history-employee" class="form-control" name="employee_id" required autocomplete="off"></div>
+                        <div><label for="history-from">From</label><input id="history-from" class="form-control" type="date" name="date_from" value="{{ history_start|date:'Y-m-d' }}" required></div>
+                        <div><label for="history-to">To</label><input id="history-to" class="form-control" type="date" name="date_to" value="{{ today|date:'Y-m-d' }}" required></div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Show history</button>
+                </form>
+                <output id="history-result" role="status" aria-live="polite"></output>
+                <div class="kiosk-history-scroll">
+                    <table id="history-table" hidden>
+                        <thead><tr><th>When</th><th>Day</th><th>Change</th><th>By</th><th>Details</th></tr></thead>
+                        <tbody id="history-body"></tbody>
+                    </table>
+                </div>
             </section>
             <section class="kiosk-settings-card kiosk-exit-card">
                 <h3><i class="fa-solid fa-door-open me-2"></i>Close kiosk session</h3>
@@ -1212,6 +1250,80 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
     const correctionResult = document.getElementById('correction-result');
     const correctionEmployee = document.getElementById('correction-employee');
     let correctionRequest = 0;
+    const previewList = document.getElementById('correction-preview-list');
+    const suggestion = document.getElementById('correction-suggestion');
+    const suggestionText = document.getElementById('correction-suggestion-text');
+    const suggestionApply = document.getElementById('correction-suggestion-apply');
+    let original = { check_in: '', check_out: '', status: '' };
+    let lateAfter = '09:00:00';
+
+    function normalizeTime(value) {
+        if (!value) return '';
+        const parts = value.split(':');
+        while (parts.length < 3) parts.push('00');
+        return parts.slice(0, 3).map(part => part.padStart(2, '0')).join(':');
+    }
+    function readableTime(value) {
+        if (!value) return 'blank';
+        const [hours, minutes, seconds] = normalizeTime(value).split(':').map(Number);
+        const suffix = hours >= 12 ? 'PM' : 'AM';
+        const hour12 = hours % 12 || 12;
+        return hour12 + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0') + ' ' + suffix;
+    }
+    function statusLabel(value) {
+        const option = Array.from(editForm.elements.status.options).find(item => item.value === value);
+        return option ? option.textContent : value;
+    }
+    function renderCorrectionPreview() {
+        const fields = editForm.elements;
+        const current = {
+            check_in: normalizeTime(fields.check_in.value),
+            check_out: normalizeTime(fields.check_out.value),
+            status: fields.status.value,
+        };
+        const rows = [
+            ['Check-in', original.check_in, current.check_in, readableTime],
+            ['Check-out', original.check_out, current.check_out, readableTime],
+            ['Status', original.status, current.status, statusLabel],
+        ];
+        previewList.replaceChildren();
+        let changed = false;
+        rows.forEach(([label, before, after, show]) => {
+            const item = document.createElement('li');
+            if (before === after) {
+                item.textContent = label + ' stays ' + show(before) + '.';
+            } else {
+                changed = true;
+                item.className = 'is-changed';
+                item.textContent = label + ': ' + show(before) + ' → ' + show(after);
+            }
+            previewList.appendChild(item);
+        });
+        if (!changed) {
+            const item = document.createElement('li');
+            item.textContent = 'Nothing has changed yet. Edit a time or the status above.';
+            previewList.appendChild(item);
+        }
+        let suggested = '';
+        if (current.check_in && (current.status === 'present' || current.status === 'late')) {
+            suggested = current.check_in > lateAfter ? 'late' : 'present';
+            if (suggested === current.status) suggested = '';
+        }
+        suggestion.hidden = !suggested;
+        if (suggested) {
+            suggestionText.textContent = 'A check-in at ' + readableTime(current.check_in) +
+                (suggested === 'late' ? ' is after' : ' is on or before') + ' the ' + readableTime(lateAfter) +
+                ' late cutoff, so the status should probably be ' + statusLabel(suggested) + '.';
+            suggestionApply.textContent = 'Use ' + statusLabel(suggested);
+            suggestionApply.dataset.status = suggested;
+        }
+    }
+    suggestionApply.addEventListener('click', () => {
+        editForm.elements.status.value = suggestionApply.dataset.status;
+        renderCorrectionPreview();
+    });
+    editForm.addEventListener('input', renderCorrectionPreview);
+    editForm.addEventListener('change', renderCorrectionPreview);
 
     function clearCorrection() {
         correctionRequest++;
@@ -1240,6 +1352,9 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
             fields.check_in.value = data.check_in_value;
             fields.check_out.value = data.check_out_value;
             fields.status.value = data.status_code;
+            original = { check_in: normalizeTime(data.check_in_value), check_out: normalizeTime(data.check_out_value), status: data.status_code };
+            lateAfter = normalizeTime(data.late_after || '09:00');
+            renderCorrectionPreview();
             correctionEmployee.textContent = [data.employee_name, data.employee_id, data.attendance_date].join(' · ');
             correctionResult.textContent = '';
             editForm.hidden = false;
@@ -1250,6 +1365,7 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
     });
     document.getElementById('clear-checkout').addEventListener('click', () => {
         editForm.elements.check_out.value = '';
+        renderCorrectionPreview();
         editForm.elements.reason.focus();
     });
     editForm.addEventListener('submit', async event => {
@@ -1286,6 +1402,62 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
             if (request === correctionRequest) correctionResult.textContent = error.message;
         } finally {
             buttons.forEach(button => button.disabled = false);
+        }
+    });
+
+    const historyForm = document.getElementById('kiosk-history-form');
+    const historyResult = document.getElementById('history-result');
+    const historyTable = document.getElementById('history-table');
+    const historyBody = document.getElementById('history-body');
+    let historyRequest = 0;
+    function clearHistory() {
+        historyRequest++;
+        historyBody.replaceChildren();
+        historyTable.hidden = true;
+        historyResult.textContent = '';
+    }
+    settingsDialog.addEventListener('close', () => {
+        clearHistory();
+        historyForm.reset();
+    });
+    historyForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        clearHistory();
+        const request = historyRequest;
+        historyResult.textContent = 'Loading attendance history…';
+        try {
+            const data = await postKioskForm(historyForm.getAttribute('action'), historyForm);
+            if (request !== historyRequest || !settingsDialog.open) return;
+            data.entries.forEach(entry => {
+                const row = historyBody.insertRow();
+                row.insertCell().textContent = entry.when;
+                row.insertCell().textContent = entry.attendance_date;
+                const kindCell = row.insertCell();
+                kindCell.textContent = entry.kind + (entry.source ? ' (' + entry.source + ')' : '');
+                row.insertCell().textContent = entry.actor;
+                const details = row.insertCell();
+                const list = document.createElement('ul');
+                entry.changes.forEach(change => {
+                    const item = document.createElement('li');
+                    item.textContent = change.field + ': ' + change.before + ' → ' + change.after;
+                    list.appendChild(item);
+                });
+                if (entry.reason) {
+                    const item = document.createElement('li');
+                    item.textContent = 'Reason: ' + entry.reason;
+                    list.appendChild(item);
+                }
+                if (!list.children.length) {
+                    const item = document.createElement('li');
+                    item.textContent = 'No field changes recorded.';
+                    list.appendChild(item);
+                }
+                details.appendChild(list);
+            });
+            historyTable.hidden = !data.entries.length;
+            historyResult.textContent = data.message;
+        } catch (error) {
+            if (request === historyRequest) historyResult.textContent = error.message;
         }
     });
 
