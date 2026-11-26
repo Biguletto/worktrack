@@ -233,6 +233,18 @@ class EmployeeForm(forms.ModelForm):
         if self.instance.pk and selected_role and selected_role != 'supervisor':
             if self.instance.user.direct_reports.exists():
                 self.add_error('role', 'Reassign this supervisor’s direct reports before changing their WorkTrack access role.')
+        employment_status = cleaned_data.get('employment_status')
+        if self.instance.pk and employment_status and employment_status != 'active':
+            active_reports = EmployeeProfile.objects.filter(
+                Q(manager=self.instance.user) | Q(backup_manager=self.instance.user),
+                employment_status='active',
+            ).exclude(pk=self.instance.pk)
+            if active_reports.exists():
+                self.add_error(
+                    'employment_status',
+                    'Reassign this supervisor’s active team members to another supervisor before '
+                    'making the account inactive or terminated. Otherwise their leave requests cannot be acknowledged.',
+                )
         return cleaned_data
 
     def save(self, commit=True):

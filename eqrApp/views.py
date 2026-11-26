@@ -1,5 +1,6 @@
 import os
 import csv
+import secrets
 import ipaddress
 import re
 import unicodedata
@@ -14,6 +15,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import login_required
+from axes.utils import reset as axes_reset
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models.deletion import ProtectedError
@@ -104,6 +106,24 @@ def get_employee_profile(user):
         return EmployeeProfile.objects.select_related('user', 'manager', 'backup_manager').get(user=user)
     except EmployeeProfile.DoesNotExist:
         return None
+
+
+TEMPORARY_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+
+
+def generate_temporary_password(length=10):
+    """Return a random one-time password with upper case, lower case and a digit."""
+    while True:
+        password = ''.join(secrets.choice(TEMPORARY_PASSWORD_ALPHABET) for _ in range(length))
+        if (any(ch.isupper() for ch in password) and any(ch.islower() for ch in password)
+                and any(ch.isdigit() for ch in password)):
+            return password
+
+
+def clear_sign_in_lockout(*usernames):
+    """Remove failed sign-in attempts so a reset account can sign in immediately."""
+    for username in {name for name in usernames if name}:
+        axes_reset(username=username)
 
 
 def generated_employee_username(first_name, last_name, employee_id=''):
@@ -643,7 +663,7 @@ def employee_create(request):
                     form.cleaned_data['first_name'], form.cleaned_data['last_name'],
                     form.cleaned_data['employee_id'],
                 )
-                temporary_password = 'employee123'
+                temporary_password = generate_temporary_password()
                 user = User.objects.create_user(
                     username=username,
                     password=temporary_password,
@@ -666,8 +686,8 @@ def employee_create(request):
             )
             messages.success(
                 request,
-                f'{profile.full_name}â€™s account was created. Username: {username}. Temporary password: employee123. '
-                'The employee must change this password at first sign-in.',
+                f'{profile.full_name}’s account was created. Username: {username}. Temporary password: {temporary_password} '
+                '(shown only once). The employee must change this password at first sign-in.',
             )
             return redirect('eqrApp:employee_list')
     else:
@@ -721,6 +741,7 @@ def employee_account_support_edit(request, pk):
     if request.method == 'POST':
         form = AdminAccountSupportForm(request.POST, user=profile.user)
         if form.is_valid():
+            old_username = profile.user.username
             profile.user.first_name = form.cleaned_data['first_name'].strip()
             profile.user.last_name = form.cleaned_data['last_name'].strip()
             profile.user.username = form.cleaned_data['username'].strip()
@@ -732,6 +753,8 @@ def employee_account_support_edit(request, pk):
                 profile.must_change_password = True
                 profile.save(update_fields=['must_change_password', 'updated_at'])
             profile.user.save(update_fields=changed_fields)
+            if password:
+                clear_sign_in_lockout(old_username, profile.user.username)
             log_system_event(
                 request, 'admin_account_support_updated',
                 'Administrator performed a restricted account-support update.',
@@ -759,16 +782,21 @@ def employee_account_reset(request, pk):
         return redirect('eqrApp:employee_list')
 
     changes = []
+    old_username = profile.user.username
     if action in {'username', 'both'}:
         profile.user.username = generated_employee_username(
             profile.user.first_name, profile.user.last_name, profile.employee_id
         )
         changes.append('username')
+    temporary_password = ''
     if action in {'password', 'both'}:
-        profile.user.set_password('employee123')
+        temporary_password = generate_temporary_password()
+        profile.user.set_password(temporary_password)
         profile.must_change_password = True
         profile.save(update_fields=['must_change_password', 'updated_at'])
         changes.append('password')
+    if 'password' in changes:
+        clear_sign_in_lockout(old_username, profile.user.username)
     profile.user.save()
     log_system_event(
         request, 'admin_account_reset',
@@ -779,7 +807,7 @@ def employee_account_reset(request, pk):
         request,
         f'Account credentials reset for {profile.full_name}. '
         + ('Username: ' + profile.user.username + '. ' if 'username' in changes else '')
-        + ('Temporary password: employee123. The user must change it at next sign-in.' if 'password' in changes else ''),
+        + (f'Temporary password: {temporary_password} (shown only once). The user must change it at next sign-in.' if 'password' in changes else ''),
     )
     return redirect('eqrApp:employee_list')
 
@@ -896,6 +924,9 @@ def attendance_list(request):
     ).select_related('leave_type')
     leave_by_employee = {application.employee_id: application for application in approved_leaves}
 
+    holiday_today = Holiday.objects.filter(date=selected_date, is_active=True).first()
+    is_rest_day = selected_date.weekday() >= 5
+
     attendance_rows = []
     for employee in roster:
         record = records_by_employee.get(employee.pk)
@@ -909,6 +940,14 @@ def attendance_list(request):
             status_code, status_label = 'late', 'Late'
         elif record and (record.status == 'present' or record.check_in):
             status_code, status_label = 'present', 'Present'
+        elif record is None and holiday_today is not None:
+            # Holidays and weekends are not workdays, so a missing scan is not an absence.
+            status_code, status_label = 'holiday', f'Holiday: {holiday_today.name}'
+        elif record is None and is_rest_day:
+            status_code, status_label = 'rest_day', 'Rest Day'
+        elif record is None and selected_date == today:
+            # The workday is still in progress; absences are only final after the day ends.
+            status_code, status_label = 'not_recorded', 'Not Yet Scanned'
         else:
             status_code, status_label = 'absent', 'Absent'
         if status_filter and status_filter != status_code:

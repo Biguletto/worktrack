@@ -14,7 +14,7 @@ This document summarizes the implementation of the requirements in the latest `C
 
 - HR creates Employee and Supervisor accounts without manually entering username or password.
 - The generated username is `lastnamefirstname`; collisions are handled with a numeric suffix.
-- The generated temporary password is `employee123`; the new account must change it at first sign-in.
+- A random temporary password is generated, shown to HR once, and must be changed at first sign-in.
 - HR account forms use the fixed six-department marketing-company list and department-specific job-position choices from the supplied reference screenshots.
 - The WorkTrack access role is independent of the job title. A job title containing “Manager” does not grant Supervisor privileges.
 - The primary and backup reporting fields are labelled Supervisor and Backup Supervisor.

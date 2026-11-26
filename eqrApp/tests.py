@@ -566,7 +566,8 @@ class WorkTrackImprovementTests(TestCase):
         self.assertTrue(profile.must_change_password)
         self.assertFalse(profile.user.is_staff)
         self.assertEqual(profile.department, 'Marketing')
-        self.assertTrue(created_user.check_password('employee123'))
+        self.assertFalse(created_user.check_password('employee123'))
+        self.assertTrue(created_user.has_usable_password())
 
     def test_administrator_has_it_tools_but_not_hr_configuration_pages(self):
         self.client.force_login(self.admin_user)
@@ -1470,3 +1471,130 @@ class DemoDataSeederTests(TestCase):
         demo_admin = User.objects.get(username='demo.admin')
         self.assertTrue(demo_admin.is_superuser)
         self.assertTrue(demo_admin.check_password('DemoPass123!'))
+
+
+class ElyssaBugFixTests(TestCase):
+    """Regression tests for the bug-fix release (weekends, supervisor deactivation, lockout reset, passwords)."""
+
+    def setUp(self):
+        self.supervisor_user = User.objects.create_user('it_supervisor', password='TestingPass123!', first_name='Sam', last_name='Reyes')
+        self.supervisor = EmployeeProfile.objects.create(
+            user=self.supervisor_user, employee_id='IT-SUP-01', role='supervisor',
+            department='IT', position='IT Manager', hire_date=date(2020, 1, 1),
+        )
+        self.employee_user = User.objects.create_user('it_employee', password='TestingPass123!')
+        self.employee = EmployeeProfile.objects.create(
+            user=self.employee_user, employee_id='IT-EMP-01', role='employee',
+            department='IT', position='Software Developer', manager=self.supervisor_user, hire_date=date(2020, 1, 1),
+        )
+        self.hr_user = User.objects.create_user('hr_officer', password='TestingPass123!')
+        EmployeeProfile.objects.create(user=self.hr_user, employee_id='HR-01', role='hr', department='HR', position='HR Officer')
+        self.admin_user = User.objects.create_superuser('it_admin', 'admin@example.com', 'TestingPass123!')
+
+    def attendance_labels(self, day):
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse('eqrApp:attendance_list'), {'date': day.isoformat()})
+        return {row['employee'].employee_id: row['status_code'] for row in response.context['attendance_rows']}
+
+    def test_weekend_is_shown_as_rest_day_not_absent(self):
+        today = timezone.localdate()
+        saturday = today - timedelta(days=(today.weekday() - 5) % 7 or 7)
+        labels = self.attendance_labels(saturday)
+        self.assertEqual(set(labels.values()), {'rest_day'})
+
+    def test_holiday_is_shown_as_holiday_not_absent(self):
+        today = timezone.localdate()
+        weekday = today - timedelta(days=7)
+        while weekday.weekday() >= 5:
+            weekday -= timedelta(days=1)
+        Holiday.objects.create(date=weekday, name='Company Foundation Day', is_active=True)
+        labels = self.attendance_labels(weekday)
+        self.assertEqual(set(labels.values()), {'holiday'})
+
+    def test_past_workday_without_record_is_still_absent(self):
+        today = timezone.localdate()
+        weekday = today - timedelta(days=7)
+        while weekday.weekday() >= 5:
+            weekday -= timedelta(days=1)
+        labels = self.attendance_labels(weekday)
+        self.assertEqual(set(labels.values()), {'absent'})
+
+    def test_today_without_scan_is_not_yet_scanned(self):
+        today = timezone.localdate()
+        if today.weekday() >= 5 or Holiday.objects.filter(date=today, is_active=True).exists():
+            self.skipTest('Today is not a workday.')
+        labels = self.attendance_labels(today)
+        self.assertEqual(set(labels.values()), {'not_recorded'})
+
+    def test_supervisor_with_active_team_cannot_be_deactivated(self):
+        form = EmployeeForm({
+            'employee_id': 'IT-SUP-01', 'first_name': 'Sam', 'last_name': 'Reyes', 'email': 'sam@example.com',
+            'department': 'IT', 'position': 'IT Manager', 'role': 'supervisor', 'hire_date': '2020-01-01',
+            'employment_status': 'inactive',
+        }, instance=self.supervisor, instance_user=self.supervisor_user, allowed_roles=['employee', 'supervisor'])
+        self.assertFalse(form.is_valid())
+        self.assertIn('employment_status', form.errors)
+
+    def test_supervisor_without_active_team_can_be_deactivated(self):
+        self.employee.manager = None
+        self.employee.employment_status = 'inactive'
+        self.employee.save()
+        form = EmployeeForm({
+            'employee_id': 'IT-SUP-01', 'first_name': 'Sam', 'last_name': 'Reyes', 'email': 'sam@example.com',
+            'department': 'IT', 'position': 'IT Manager', 'role': 'supervisor', 'hire_date': '2020-01-01',
+            'employment_status': 'inactive',
+        }, instance=self.supervisor, instance_user=self.supervisor_user, allowed_roles=['employee', 'supervisor'])
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def lock_out_employee(self):
+        anonymous = Client()
+        for _ in range(5):
+            anonymous.post(reverse('eqrApp:login'), {'username': 'it_employee', 'password': 'wrong-password'})
+        response = anonymous.post(reverse('eqrApp:login'), {'username': 'it_employee', 'password': 'TestingPass123!'})
+        self.assertEqual(response.status_code, 429)
+
+    def message_password(self, response):
+        import re
+        text = ' '.join(str(message) for message in response.context['messages'])
+        match = re.search(r'Temporary password: (\S+) \(shown only once\)', text)
+        self.assertIsNotNone(match, text)
+        return match.group(1)
+
+    def test_admin_password_reset_unlocks_locked_account(self):
+        self.lock_out_employee()
+        admin = Client()
+        admin.force_login(self.admin_user)
+        response = admin.post(reverse('eqrApp:employee_account_reset', args=[self.employee.pk]),
+                              {'reset_action': 'password'}, follow=True)
+        new_password = self.message_password(response)
+        self.assertNotEqual(new_password, 'employee123')
+        login = Client().post(reverse('eqrApp:login'), {'username': 'it_employee', 'password': new_password})
+        self.assertEqual(login.status_code, 302)
+
+    def test_account_support_password_change_unlocks_locked_account(self):
+        self.lock_out_employee()
+        admin = Client()
+        admin.force_login(self.admin_user)
+        admin.post(reverse('eqrApp:employee_account_support_edit', args=[self.employee.pk]), {
+            'first_name': 'Ivy', 'last_name': 'Tan', 'username': 'it_employee',
+            'new_password': 'FreshStart!2026', 'confirm_password': 'FreshStart!2026',
+            'new_password_confirm': 'FreshStart!2026',
+        })
+        self.employee_user.refresh_from_db()
+        self.assertTrue(self.employee_user.check_password('FreshStart!2026'))
+        login = Client().post(reverse('eqrApp:login'), {'username': 'it_employee', 'password': 'FreshStart!2026'})
+        self.assertEqual(login.status_code, 302)
+
+    def test_new_account_gets_random_password_and_clean_message(self):
+        self.client.force_login(self.hr_user)
+        response = self.client.post(reverse('eqrApp:employee_create'), {
+            'first_name': 'Ana', 'last_name': 'Cruz', 'email': 'ana@example.com', 'employee_id': 'IT-EMP-09',
+            'position': 'Software Developer', 'role': 'employee', 'department': 'IT', 'phone_number': '',
+            'hire_date': '2021-01-01', 'manager': str(self.supervisor_user.pk), 'backup_manager': '',
+        }, follow=True)
+        text = ' '.join(str(message) for message in response.context['messages'])
+        self.assertIn('Ana Cruz’s account was created', text)
+        self.assertNotIn('â€', text)
+        password = self.message_password(response)
+        self.assertNotEqual(password, 'employee123')
+        self.assertTrue(User.objects.get(username='cruzana').check_password(password))

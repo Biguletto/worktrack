@@ -5,7 +5,7 @@
 <div class="form-card"><form method="post">{% csrf_token %}
     {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
     <div class="form-section-title"><span>01</span><div><h3>Account details</h3><p>Contact information. WorkTrack automatically generates the username and temporary password for new accounts.</p></div></div>
-    {% if not is_edit %}<div class="alert alert-info small"><strong>Automatic login setup:</strong> Username is generated as lastnamefirstname (a number is appended if needed). The initial password is <code>employee123</code> and must be changed at first sign-in.</div>{% else %}<div class="alert alert-secondary small">Login credentials are not edited in this form. An Administrator can reset the username or temporary password from Employee Account Support.</div>{% endif %}
+    {% if not is_edit %}<div class="alert alert-info small"><strong>Automatic login setup:</strong> Username is generated as lastnamefirstname (a number is appended if needed). A random temporary password is generated and shown to HR once after saving; the employee must change it at first sign-in.</div>{% else %}<div class="alert alert-secondary small">Login credentials are not edited in this form. An Administrator can reset the username or temporary password from Employee Account Support.</div>{% endif %}
     <div class="form-grid">
         {% for field in form %}
             {% if field.name == 'first_name' or field.name == 'last_name' or field.name == 'email' %}
