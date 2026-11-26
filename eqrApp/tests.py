@@ -1333,6 +1333,43 @@ class LatestRevisionFeatureTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn('Activate the kiosk', response.json()['message'])
 
+    def test_kiosk_correction_permissions_validation_and_leave(self):
+        url = reverse('eqrApp:attendance_kiosk_edit')
+        day = timezone.localdate() - timedelta(days=2)
+        key = {'employee_id': self.employee.employee_id, 'attendance_date': day.isoformat()}
+        record = AttendanceRecord.objects.create(employee=self.employee, attendance_date=day, status='absent')
+        lookup = {**key, 'action': 'lookup'}
+        for user in (self.hr_user, self.marketing_supervisor_user, self.employee_user, self.admin_user):
+            self.client.force_login(user)
+            self.assertEqual(self.client.post(url, lookup).status_code, 403)
+        self.client.post(reverse('eqrApp:attendance_kiosk'), {'username': self.admin_user.username, 'password': 'TestingPass123!'})
+        self.assertEqual(self.client.post(url, lookup).status_code, 403)
+        self.client.post(reverse('eqrApp:attendance_kiosk_settings_unlock'), {'password': 'TestingPass123!'})
+        with self.settings(WORKTRACK_KIOSK_IP_RANGES=['192.0.2.0/24']):
+            self.assertEqual(self.client.post(url, lookup).status_code, 403)
+        version = self.client.post(url, lookup).json()['version']
+        update = {**key, 'version': version, 'action': 'update', 'status': 'present',
+                  'check_in': '08:30', 'check_out': '17:15', 'reason': 'Verified missed punches'}
+        for change in ({'check_in': ''}, {'check_out': '07:00'}, {'reason': ' '}, {'status': 'absent'}):
+            self.assertEqual(self.client.post(url, {**update, **change}).status_code, 400)
+        self.assertFalse(record.audit_entries.exists())
+        self.assertEqual(self.client.post(url, update).status_code, 200)
+        record.refresh_from_db()
+        self.assertEqual(timezone.localtime(record.check_in).strftime('%H:%M'), '08:30')
+        self.assertEqual(timezone.localtime(record.check_out).strftime('%H:%M'), '17:15')
+        leave_type = LeaveType.objects.first()
+        leave = LeaveApplication.objects.create(employee=self.employee, leave_type=leave_type,
+            start_date=day, end_date=day, status='approved', is_half_day=True)
+        update['version'] = self.client.post(url, lookup).json()['version']
+        self.assertEqual(self.client.post(url, {**update, 'action': 'delete'}).status_code, 409)
+        self.assertEqual(self.client.post(url, update).status_code, 409)
+        self.assertEqual(self.client.post(url, {**update, 'status': 'half_day'}).status_code, 200)
+        leave.is_half_day = False
+        leave.save(update_fields=['is_half_day'])
+        self.assertEqual(self.client.post(url, lookup).status_code, 409)
+        with patch('eqrApp.views.timezone.now', return_value=timezone.now() + timedelta(minutes=11)):
+            self.assertEqual(self.client.post(url, {**update, 'action': 'delete'}).status_code, 403)
+
     def test_kiosk_manual_entry_requires_unlocked_settings_and_preserves_attendance_history(self):
         self.client.force_login(self.admin_user)
         activate_url = reverse('eqrApp:attendance_kiosk')
@@ -1343,7 +1380,7 @@ class LatestRevisionFeatureTests(TestCase):
         self.assertEqual(kiosk_page.status_code, 200)
         self.assertContains(kiosk_page, 'kiosk-camera-select')
         self.assertContains(kiosk_page, 'kiosk-manual-form')
-        self.assertNotContains(kiosk_page, 'kiosk-edit-form')
+        self.assertContains(kiosk_page, 'kiosk-edit-form')
 
         unlock_url = reverse('eqrApp:attendance_kiosk_settings_unlock')
         unlocked = self.client.post(unlock_url, {'password': 'TestingPass123!'})
@@ -1369,22 +1406,40 @@ class LatestRevisionFeatureTests(TestCase):
             self.assertEqual(submit('check_out').status_code, 409)
         self.assertEqual(self.client.post(manual_url, {'employee_id': self.hr_user.employee_profile.employee_id, 'action': 'check_in'}).status_code, 404)
 
-        corrected = self.client.post(edit_url, {
-            'employee_id': self.employee.employee_id,
-            'attendance_date': timezone.localdate().isoformat(),
-            'check_in': '',
-            'check_out': '',
-            'status': 'present',
-            'remarks': 'Attempted attendance correction.',
-        })
-        self.assertEqual(corrected.status_code, 403)
-        self.assertIn('not permitted', corrected.json()['message'].lower())
         self.assertEqual(AttendanceRecord.objects.count(), before_count + 1)
         self.assertEqual(AttendanceAudit.objects.count(), before_audits + 2)
+
+        key = {'employee_id': self.employee.employee_id, 'attendance_date': record.attendance_date.isoformat()}
+        found = self.client.post(edit_url, {**key, 'action': 'lookup'}).json()
+        self.assertEqual(found['record_id'], record.pk)
+        update = {**key, 'action': 'update', 'version': found['version'], 'status': 'late',
+                  'check_in': found['check_in_value'], 'check_out': '', 'reason': 'Accidental early checkout'}
+        self.assertEqual(self.client.post(edit_url, update).status_code, 200)
+        check_in = record.check_in
+        record.refresh_from_db()
+        self.assertEqual(record.check_in, check_in)
+        self.assertIsNone(record.check_out)
+        self.assertEqual(record.status, 'late')
+        audit = record.audit_entries.latest('pk')
+        self.assertEqual(audit.actor, self.admin_user)
+        self.assertIsNotNone(audit.old_values['check_out'])
+        self.assertEqual(audit.new_values['correction_reason'], update['reason'])
+        qr = build_daily_qr_bundle(self.employee, qr_date=record.attendance_date)
+        with patch('eqrApp.views.timezone.now', return_value=check_in + timedelta(minutes=15)):
+            scan = self.client.post(reverse('eqrApp:attendance_kiosk_scan'), {'token': qr['token']})
+        self.assertEqual(scan.json()['action'], 'check_out')
+        self.assertEqual(self.client.post(edit_url, {**update, 'action': 'delete'}).status_code, 409)
+        latest = self.client.post(edit_url, {**key, 'action': 'lookup'}).json()
+        self.assertEqual(self.client.post(edit_url, {**update, 'version': latest['version'], 'action': 'delete'}).status_code, 200)
+        self.assertFalse(AttendanceRecord.objects.filter(pk=record.pk).exists())
+        deletion = AttendanceAudit.objects.get(employee=self.employee, action='deleted')
+        self.assertEqual(deletion.actor, self.admin_user)
+        self.assertIsNotNone(deletion.old_values['check_out'])
 
         locked = self.client.post(reverse('eqrApp:attendance_kiosk_settings_lock'))
         self.assertEqual(locked.status_code, 200)
         self.assertEqual(self.client.post(manual_url, {'employee_id': self.employee.employee_id, 'action': 'check_out'}).status_code, 403)
+        self.assertEqual(self.client.post(edit_url, {**key, 'action': 'lookup'}).status_code, 403)
 
         self.client.force_login(self.employee_user)
         self.assertEqual(self.client.post(unlock_url, {'password': 'TestingPass123!'}).status_code, 403)

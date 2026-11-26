@@ -261,7 +261,7 @@ The final deployment should also be tested manually with these cases:
 - Submit a leave request with a valid document; verify the assigned supervisor/backup supervisor workflow and final HR approval.
 - Configure a holiday and leave balance; verify working-day calculations, half-day requests, insufficient-balance rejection, and balance deduction only after final approval.
 - Verify the first QR scan records check-in, the second records check-out, a third scan is rejected, and full-day approved leave blocks scanning. Verify Administrator manual-attendance and attendance-edit endpoints return HTTP 403 and do not change records.
-- Verify HR and supervisors can monitor only their authorized attendance scope, while the kiosk accepts QR scans and verified Administrator entries. No role can manually edit attendance in this demo build.
+- Verify HR and supervisors can monitor only their authorized attendance scope. Verify the activating Administrator can correct or delete an attendance record only after unlocking kiosk settings.
 - Upload and download a document through the application and verify the object exists in the private S3 bucket. Verify the URL expires and an unauthorized role cannot retrieve the document.
 - Create/read/update/delete application data and verify corresponding records in RDS PostgreSQL.
 - Present EC2, RDS, S3, VPC/subnets/route tables, security groups, IAM instance profile/policies, and the request path through the live AWS console.
@@ -330,7 +330,7 @@ Application-level kiosk navigation restrictions cannot stop a person from physic
 - Leave balances are grouped by employee with name/employee-ID search; pending approvals and request history use separate search and filter controls.
 - Administrator System Logs display warnings and errors only, with date and severity filters. The user interface suppresses employee identity and actor information.
 - Administrator Employee Account Support can change only the account username, first/last name, and password. It cannot change roles, departments, positions, supervisor assignments, attendance, or leave records.
-- Kiosk settings support camera selection, manual attendance by employee ID, and verified exit. Historical corrections remain disabled.
+- Kiosk settings support camera selection, manual attendance by employee ID, audited corrections and deletion by employee ID and date, and verified exit.
 - The application layout uses responsive breakpoints and a resize-aware navigation layout for desktop, tablet, and mobile widths.
 
 

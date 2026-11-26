@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django import forms
 from django.contrib.auth.models import User
 from django.db.models import Q
@@ -268,6 +270,43 @@ class LeaveApplicationForm(forms.ModelForm):
             if start_date < timezone.localdate():
                 self.add_error('start_date', 'Leave requests must start today or on a future date.')
         return cleaned_data
+
+
+class KioskCorrectionForm(forms.Form):
+    check_in = forms.TimeField(required=False)
+    check_out = forms.TimeField(required=False)
+    status = forms.ChoiceField(choices=[
+        choice for choice in AttendanceRecord.STATUS_CHOICES if choice[0] != 'on_leave'
+    ])
+
+    def __init__(self, data, record):
+        super().__init__(data)
+        self.record = record
+
+    def clean(self):
+        values = super().clean()
+        now = timezone.now()
+        for field in ('check_in', 'check_out'):
+            if values.get(field) is None:
+                continue
+            entered = timezone.make_aware(datetime.combine(self.record.attendance_date, values[field]))
+            original = getattr(self.record, field)
+            # The kiosk displays seconds. Preserve the exact stored instant for unchanged punches.
+            if original and original.replace(microsecond=0) == entered:
+                entered = original
+            if entered > now:
+                raise forms.ValidationError('Attendance times cannot be in the future.')
+            values[field] = entered
+        start, end = values.get('check_in'), values.get('check_out')
+        if end and not start:
+            raise forms.ValidationError('Enter a check-in before recording a check-out.')
+        if start and end and end < start:
+            raise forms.ValidationError('Check-out cannot be earlier than check-in.')
+        if values.get('status') == 'absent' and start:
+            raise forms.ValidationError('Clear both times to mark this employee absent.')
+        if values.get('status') in ('present', 'late') and not start:
+            raise forms.ValidationError('A present or late record requires a check-in.')
+        return values
 
 
 class AttendanceRecordForm(forms.ModelForm):

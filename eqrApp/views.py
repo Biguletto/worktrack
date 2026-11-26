@@ -29,7 +29,7 @@ from django.core import signing
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .forms import EmployeeForm, AdminAccountSupportForm, LeaveApplicationForm, AttendanceRecordForm, LeaveBalanceForm, HolidayForm, DEPARTMENT_CHOICES
+from .forms import EmployeeForm, AdminAccountSupportForm, LeaveApplicationForm, AttendanceRecordForm, KioskCorrectionForm, LeaveBalanceForm, HolidayForm, DEPARTMENT_CHOICES
 from .roles import get_user_role
 from .models import (
     EmployeeProfile,
@@ -1076,6 +1076,7 @@ def attendance_kiosk_run(request):
         raise PermissionDenied
 
     today = timezone.localdate()
+    request.session.pop('worktrack_kiosk_settings_unlocked_until', None)
     recent_records = AttendanceRecord.objects.filter(
         attendance_date=today
     ).select_related('employee__user').order_by('-updated_at')[:12]
@@ -1085,6 +1086,7 @@ def attendance_kiosk_run(request):
         'exit_url': reverse('eqrApp:attendance_kiosk_exit'),
         'settings_unlock_url': reverse('eqrApp:attendance_kiosk_settings_unlock'),
         'settings_lock_url': reverse('eqrApp:attendance_kiosk_settings_lock'),
+        'correction_statuses': KioskCorrectionForm.base_fields['status'].choices,
         'admin_display_name': request.user.get_full_name() or request.user.get_username(),
         'recent_records': recent_records,
     })
@@ -1219,7 +1221,7 @@ def record_kiosk_attendance(request, employee, forced_action=None, source='self_
                 )
             else:
                 old_values = attendance_snapshot(record)
-                preserve_half_day = record.source == 'leave_sync' and record.status == 'half_day'
+                preserve_half_day = record.status == 'half_day' and record.source in ('leave_sync', 'admin')
                 record.check_in = now
                 if not preserve_half_day:
                     record.status = arrival_status
@@ -1307,16 +1309,66 @@ def attendance_kiosk_manual(request):
 @admin_required
 @require_POST
 def attendance_kiosk_edit(request):
-    """Attendance corrections are disabled for Administrators by the current system policy."""
-    if not kiosk_session_is_active(request) or not request_kiosk_ip_allowed(request):
-        return JsonResponse({
-            'ok': False,
-            'message': 'An active Administrator kiosk session on an approved device is required.'
-        }, status=403)
-    return JsonResponse({
-        'ok': False,
-        'message': 'Attendance editing is not permitted for the Administrator role. Use the validated QR scanning workflow only.'
-    }, status=403)
+    if not kiosk_settings_is_unlocked(request) or not request_kiosk_ip_allowed(request):
+        return JsonResponse({'ok': False, 'message': 'Unlock Administrator kiosk settings first.'}, status=403)
+    action = request.POST.get('action')
+    if action not in ('lookup', 'update', 'delete'):
+        return JsonResponse({'ok': False, 'message': 'Choose an attendance correction action.'}, status=400)
+    try:
+        day = date.fromisoformat(request.POST.get('attendance_date', ''))
+        if day > timezone.localdate():
+            raise ValueError
+    except ValueError:
+        return JsonResponse({'ok': False, 'message': 'Choose today or an earlier attendance date.'}, status=400)
+
+    with transaction.atomic():
+        record = AttendanceRecord.objects.select_for_update(of=('self',)).select_related('employee__user').filter(
+            employee__employee_id=request.POST.get('employee_id', '').strip(),
+            employee__role__in=('employee', 'supervisor'), attendance_date=day,
+        ).first()
+        if record is None:
+            return JsonResponse({'ok': False, 'message': 'No attendance record for that employee ID and date.'}, status=404)
+        leaves = LeaveApplication.objects.filter(employee=record.employee, status='approved', start_date__lte=day, end_date__gte=day)
+        if record.status == 'on_leave' or leaves.filter(is_half_day=False).exists():
+            return JsonResponse({'ok': False, 'message': 'This day is managed by approved leave.'}, status=409)
+
+        version = f'{record.pk}/{record.updated_at.isoformat()}'
+        if action == 'lookup':
+            data = kiosk_attendance_payload(record, action, '')
+            data['version'] = version
+            for field in ('check_in', 'check_out'):
+                stamp = getattr(record, field)
+                data[field + '_value'] = timezone.localtime(stamp).strftime('%H:%M:%S') if stamp else ''
+            return JsonResponse(data)
+        if request.POST.get('version') != version:
+            return JsonResponse({'ok': False, 'message': 'Attendance has changed. Find the record again before saving.'}, status=409)
+        reason = request.POST.get('reason', '').strip()
+        if not reason or len(reason) > 300:
+            return JsonResponse({'ok': False, 'message': 'Enter a correction reason of up to 300 characters.'}, status=400)
+        if leaves.filter(is_half_day=True).exists() and (action == 'delete' or request.POST.get('status') != 'half_day'):
+            return JsonResponse({'ok': False, 'message': 'Approved half-day leave must keep its Half Day attendance record.'}, status=409)
+
+        old_values = attendance_snapshot(record)
+        if action == 'delete':
+            data = kiosk_attendance_payload(record, action, 'Attendance record deleted.')
+            AttendanceAudit.objects.create(employee=record.employee, attendance=record, actor=request.user,
+                action='deleted', old_values=old_values, new_values={'correction_reason': reason})
+            record.delete()
+            return JsonResponse(data)
+
+        form = KioskCorrectionForm(request.POST, record)
+        if not form.is_valid():
+            return JsonResponse({'ok': False, 'message': ' '.join(error for errors in form.errors.values() for error in errors)}, status=400)
+        for field in ('check_in', 'check_out', 'status'):
+            setattr(record, field, form.cleaned_data[field])
+        if attendance_snapshot(record) == old_values:
+            return JsonResponse({'ok': False, 'message': 'Change a time or status before saving.'}, status=400)
+        record.recorded_by = request.user
+        record.source = 'admin'
+        record.save(update_fields=['check_in', 'check_out', 'status', 'recorded_by', 'source', 'updated_at'])
+        AttendanceAudit.objects.create(employee=record.employee, attendance=record, actor=request.user,
+            action='updated', old_values=old_values, new_values={**attendance_snapshot(record), 'correction_reason': reason})
+        return JsonResponse(kiosk_attendance_payload(record, action, 'Attendance correction saved.'))
 
 
 @admin_required

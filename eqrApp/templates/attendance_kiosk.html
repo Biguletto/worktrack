@@ -1,4 +1,4 @@
-{% load static %}
+{% load static tz %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -271,6 +271,11 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
 .kiosk-admin-form .form-control,.kiosk-admin-form .form-select,.kiosk-device-row .form-select { min-height:37px; font-size:11px; }
 .kiosk-admin-form .btn { justify-self:start; margin-top:4px; font-size:10px; }
 .kiosk-form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.kiosk-correction-card { grid-column:1 / -1; }
+.kiosk-correction-card [hidden] { display:none; }
+.kiosk-correction-card .kiosk-form-row { grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); }
+.kiosk-correction-card #kiosk-edit-form { border-top:1px solid #e9edf4; margin-top:14px; padding-top:14px; }
+.kiosk-correction-card output { display:block; margin-top:8px; }
 .kiosk-exit-card { display:flex; flex-direction:column; align-items:flex-start; }
 .kiosk-settings-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid #edf0f5; color:#8994a7; font-size:10px; }
 .kiosk-settings-footer .btn { font-size:10px; }
@@ -386,6 +391,38 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
                     <button class="btn btn-primary" type="submit">Record attendance</button>
                     <output id="manual-result" role="status" aria-live="polite"></output>
                 </form>
+            </section>
+            <section class="kiosk-settings-card kiosk-correction-card">
+                <h3>Correct attendance</h3>
+                <form id="kiosk-find-form" class="kiosk-admin-form" method="post" action="{% url 'eqrApp:attendance_kiosk_edit' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="lookup">
+                    <div class="kiosk-form-row">
+                        <div><label for="find-employee">Employee ID</label><input id="find-employee" class="form-control" name="employee_id" required autocomplete="off"></div>
+                        <div><label for="find-date">Attendance date</label><input id="find-date" class="form-control" type="date" name="attendance_date" value="{{ today|date:'Y-m-d' }}" required></div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Find record</button>
+                </form>
+                <form id="kiosk-edit-form" class="kiosk-admin-form" method="post" hidden>
+                    {% csrf_token %}
+                    <strong id="correction-employee"></strong>
+                    <input type="hidden" name="employee_id"><input type="hidden" name="attendance_date"><input type="hidden" name="version"><input type="hidden" name="action">
+                    <div class="kiosk-form-row">
+                        <div><label for="correction-in">Check-in</label><input type="time" step="1" class="form-control" id="correction-in" name="check_in"></div>
+                        <div><label for="correction-out">Check-out</label><input type="time" step="1" class="form-control" id="correction-out" name="check_out"></div>
+                        <div><label for="correction-status">Attendance status</label><select id="correction-status" name="status" class="form-select">{% for value, label in correction_statuses %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                    </div>
+                    <button type="button" id="clear-checkout" class="btn btn-outline-secondary">Clear accidental check-out</button>
+                    {% get_current_timezone as attendance_timezone %}
+                    <p class="kiosk-settings-note">Save with check-out blank to reopen the shift. Times are shown in {{ attendance_timezone }}.</p>
+                    <label for="correction-reason">Reason for correction or deletion</label>
+                    <input class="form-control" id="correction-reason" name="reason" required maxlength="300" autocomplete="off">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="submit" value="update" class="btn btn-primary">Save correction</button>
+                        <button type="submit" value="delete" class="btn btn-outline-danger">Delete record</button>
+                    </div>
+                </form>
+                <output id="correction-result" role="status" aria-live="polite"></output>
             </section>
             <section class="kiosk-settings-card kiosk-exit-card">
                 <h3><i class="fa-solid fa-door-open me-2"></i>Close kiosk session</h3>
@@ -1126,7 +1163,6 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
         }
     });
 
-    let preserveSettingsUnlockForExit = false;
     let settingsUnlockTimer = null;
     async function lockKioskSettings() {
         try {
@@ -1141,8 +1177,7 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
     settingsDialog.addEventListener('close', () => {
         if (settingsUnlockTimer) window.clearTimeout(settingsUnlockTimer);
         settingsUnlockTimer = null;
-        if (!preserveSettingsUnlockForExit) lockKioskSettings();
-        preserveSettingsUnlockForExit = false;
+        lockKioskSettings();
     });
     document.getElementById('kiosk-close-settings').addEventListener('click', closeSettingsDialog);
     document.getElementById('kiosk-close-settings-bottom').addEventListener('click', closeSettingsDialog);
@@ -1171,6 +1206,89 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
         }
     });
 
+    const findForm = document.getElementById('kiosk-find-form');
+    const correctionUrl = findForm.getAttribute('action');
+    const editForm = document.getElementById('kiosk-edit-form');
+    const correctionResult = document.getElementById('correction-result');
+    const correctionEmployee = document.getElementById('correction-employee');
+    let correctionRequest = 0;
+
+    function clearCorrection() {
+        correctionRequest++;
+        editForm.hidden = true;
+        editForm.reset();
+        correctionEmployee.textContent = '';
+        correctionResult.textContent = '';
+    }
+    findForm.addEventListener('input', clearCorrection);
+    settingsDialog.addEventListener('close', () => {
+        clearCorrection();
+        findForm.reset();
+    });
+    findForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        clearCorrection();
+        const request = correctionRequest;
+        correctionResult.textContent = 'Finding attendance record…';
+        try {
+            const data = await postKioskForm(correctionUrl, findForm);
+            if (request !== correctionRequest || !settingsDialog.open) return;
+            const fields = editForm.elements;
+            fields.employee_id.value = data.employee_id;
+            fields.attendance_date.value = data.attendance_date;
+            fields.version.value = data.version;
+            fields.check_in.value = data.check_in_value;
+            fields.check_out.value = data.check_out_value;
+            fields.status.value = data.status_code;
+            correctionEmployee.textContent = [data.employee_name, data.employee_id, data.attendance_date].join(' · ');
+            correctionResult.textContent = '';
+            editForm.hidden = false;
+            fields.check_in.focus();
+        } catch (error) {
+            if (request === correctionRequest) correctionResult.textContent = error.message;
+        }
+    });
+    document.getElementById('clear-checkout').addEventListener('click', () => {
+        editForm.elements.check_out.value = '';
+        editForm.elements.reason.focus();
+    });
+    editForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const action = event.submitter?.value || 'update';
+        if (action === 'delete' && !window.confirm('Delete the attendance record for ' + correctionEmployee.textContent + '?')) return;
+        editForm.elements.namedItem('action').value = action;
+        const buttons = editForm.querySelectorAll('button');
+        if (buttons[0].disabled) return;
+        buttons.forEach(button => button.disabled = true);
+        const request = correctionRequest;
+        try {
+            const data = await postKioskForm(correctionUrl, editForm);
+            if (data.attendance_date === todayIso) {
+                if (action === 'delete') {
+                    logBody.querySelector('tr[data-record-id="' + data.record_id + '"]')?.remove();
+                    logCount.textContent = String(logBody.querySelectorAll('tr[data-record-id]').length);
+                    if (!logBody.children.length) {
+                        const row = logBody.insertRow();
+                        row.id = 'kiosk-log-empty';
+                        const cell = row.insertCell();
+                        cell.colSpan = 4;
+                        cell.textContent = 'No attendance records to display.';
+                    }
+                } else {
+                    upsertAttendanceLog(data);
+                }
+            }
+            if (request === correctionRequest) {
+                clearCorrection();
+                correctionResult.textContent = data.message;
+            }
+        } catch (error) {
+            if (request === correctionRequest) correctionResult.textContent = error.message;
+        } finally {
+            buttons.forEach(button => button.disabled = false);
+        }
+    });
+
     document.getElementById('kiosk-restart-camera').addEventListener('click', async () => {
         await stopCamera();
         await startCamera();
@@ -1182,7 +1300,6 @@ body.kiosk-standalone { height:100vh; min-height:0; overflow:hidden !important; 
 
     let kioskExitSubmitted = false;
     document.getElementById('kiosk-open-exit').addEventListener('click', () => {
-        preserveSettingsUnlockForExit = true;
         settingsDialog.close();
         exitDialog.showModal();
         exitPassword.focus();

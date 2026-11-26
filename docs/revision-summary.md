@@ -1,4 +1,4 @@
-> **Revision note:** This document includes earlier stages of WorkTrack. The final section, “Latest uploaded CHANGES (1).txt implementation,” supersedes any earlier kiosk instructions in this file that mention visible exit controls, manual QR-token entry, or manual exposure controls.
+> **Revision history.** For current kiosk procedures, see the [kiosk operator guide](kiosk-operator-guide.md). Administrators can enter punches, correct times or daily status, and delete mistaken records inside the password-protected Ctrl+0 settings.
 
 # WorkTrack Revision Summary - Architecture-Aligned Build
 
